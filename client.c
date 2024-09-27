@@ -106,8 +106,6 @@ int client_prompt_name(char *name, int maxlen) {
     return ret;
 }
 int client_prompt_move(struct Player_client *p, enum Suits main_suit) {
-    struct Card_node *cn = (struct Card_node*)p->hand.head;
-
     printf("Which card do you want to play? ");
     int selection = -1;
     size_t bufsiz = 8;
@@ -360,11 +358,11 @@ int net_get_coronation(struct Game_client *game) { // ret: winner_id
 int client_connect(char *addr, char *port) {
     int sockfd = -1, res = 0, one = 1;
     struct addrinfo hints, *ai_res, *ain;
-    char port_str[8];
+    char default_port[8];
     assert(addr != NULL);
     if (port == NULL) {
-        snprintf(port_str, 5, "%d", PORT_DEFAULT);
-        port = port_str;
+        snprintf(default_port, 5, "%d", PORT_DEFAULT);
+        port = default_port;
     }
 
     memset(&hints, 0, sizeof(hints));
@@ -373,7 +371,7 @@ int client_connect(char *addr, char *port) {
     hints.ai_flags = 0;
     hints.ai_protocol = 0;
 
-    if ((res = getaddrinfo(addr, port_str, &hints, &ai_res)) != 0) {
+    if ((res = getaddrinfo(addr, port, &hints, &ai_res)) != 0) {
         fprintf(stderr, "FATL: gai = %s\n", gai_strerror(res));
         return -1;
     }
@@ -406,7 +404,7 @@ int client_connect(char *addr, char *port) {
 
     freeaddrinfo(ai_res);
 
-    if (ain == NULL) {
+    if (ain == NULL || res == -1) {
         fprintf(stderr, "FATL: Could not connect to server...\n");
         return -1;
     }
@@ -514,8 +512,8 @@ int client_play_round(struct Game_client *g) {
     while (cards_remaining > 0) {
         memset(selector_arr, 0, p->card_count * sizeof(int));
         memset(thrown_cards, 0, g->player_count * sizeof(struct Card*));
-        pass_winner_id = pass_suit = thrown_totval = -1;
-        extra_point = 3 * (cards_remaining == g->player_count); // last pass is worth 1 more full point
+        pass_suit = -1;
+        extra_point = 3 * (cards_remaining == g->player_count); // last pass is worth 1 full point more
 
         game_print_roundpass(g->round, g->pass);
         game_print_hand((struct Card_node*)p->hand.head, p->card_count, selector_arr);

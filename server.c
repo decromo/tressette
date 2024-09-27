@@ -77,7 +77,6 @@ void simulate_round(struct Player_serv players[4], const int n_players, const in
     
     while (cards_remaining > 0) {
         main_suit = -1;
-        thrown_totval = pass_winner_id = turn_player_id = -1;
         memset(thrown_cards, 0, n_players * sizeof(struct Card*));
 
         extra_point = 3 * (cards_remaining == n_players); // last pass is worth 1 more full point
@@ -95,7 +94,6 @@ void simulate_round(struct Player_serv players[4], const int n_players, const in
             } while (turn_card == NULL);
             printf("NOTE: Played card is %d of %s:%d\n", turn_card->c->value+1, suit_to_string(turn_card->c->suit), turn_card->c->value);
             if (i_turn == 0) { main_suit = turn_card->c->suit; };
-            int moveresult_args[4] = { turn_player_id, turn_card_id, n_round, i_pass};
             net_send_moveresult(players, n_players, NULL, (struct Packet_moveresult) {
                 .round = n_round,
                 .pass = i_pass,
@@ -428,11 +426,14 @@ int net_send_coronation(struct Player_serv *ps, int np, int *whom, int winner_id
 }
 
 
-int serv_listen(int port) {
+int serv_listen(char *port) {
     int sockfd = -1, res, one = 1;
     struct addrinfo hints, *ai_res, *ain;
-    char port_str[8];
-    snprintf(port_str, 5, "%d", port);
+    char default_port[8];
+    if (port == NULL) {
+        snprintf(default_port, 5, "%d", PORT_DEFAULT);
+        port = default_port;
+    }
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
@@ -440,7 +441,7 @@ int serv_listen(int port) {
     hints.ai_flags = AI_PASSIVE;
     hints.ai_protocol = 0;
 
-    if ((res = getaddrinfo(NULL, port_str, &hints, &ai_res)) != 0) {
+    if ((res = getaddrinfo(NULL, default_port, &hints, &ai_res)) != 0) {
         fprintf(stderr, "FATL: gai = %s\n", gai_strerror(res));
         return -1;
     }
@@ -449,7 +450,7 @@ int serv_listen(int port) {
         if ((res = socket(ain->ai_family, ain->ai_socktype, ain->ai_protocol)) == -1) {
             perror("WARN: socket");
             continue;
-        };
+        }
         sockfd = res;
         if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == -1) {
             perror("ERRO: setsockopt");
@@ -622,16 +623,15 @@ int main(int argc, char **argv) {
 
     int res = 0,
         n_players = 0, 
-        port, 
         listen_sock = 0;
+    char *port_str = NULL;
 
     if (argc >= 2) {
-        port = strtol(argv[1], NULL, 10);
+        port_str = argv[1];
     }
-    if (port == 0) port = PORT_DEFAULT;
 
     printf("INFO: Trying to bind to an address...\n");
-    if ((listen_sock = serv_listen(port)) == -1) {
+    if ((listen_sock = serv_listen(port_str)) == -1) {
         exit(1);
     }
 
