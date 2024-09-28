@@ -8,8 +8,14 @@
 typedef uint8_t u8;
 
 enum __attribute__((__packed__)) Packet_kind {
-    JOIN, ACK, COMMAND, NAME, PLAYERINFO, GAMEINFO, CARD, HAND, MOVE, 
+    REQUEST, ACK, COMMAND, NAME, PLAYERINFO, GAMEINFO, CARD, HAND, MOVE, 
     MOVERESULT, OUTCOME, LEADERBOARD, CORONATION
+};
+enum __attribute__((__packed__)) Request_kind {
+    EVENT, NAME, MOVE
+};
+enum __attribute__((__packed__)) Event_kind {
+
 };
 
 struct Packet {
@@ -17,6 +23,9 @@ struct Packet {
     u8 size;
     char data[PACKET_SIZE - 2];
 } __attribute__((__packed__));
+struct Packet_request {
+    enum Request_kind;
+};
 struct Packet_name {
     u8 size;
     char name[PLAYERNAME_STRLEN];
