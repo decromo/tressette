@@ -440,7 +440,7 @@ void game_print_roundpass(int round, int pass) {
     printf("\t\t\t\t\t\b\b\b--- Round %d - Pass %d ---\n", round+1, pass+1);
     printf("\t\t\t\t\t\b\b\b------------------------%s\n", extra_dashes);
 }
-void game_print_hand(struct Card_node *head, int n_cards, int selector_arr[20]) {
+void game_print_hand(struct Card_node *head, int n_cards, int selector_arr[10]) {
     struct Packet_card buf[4][20];
     memset(buf, 0, 80 * sizeof(struct Packet_card));
     int sizes[4] = {0};
