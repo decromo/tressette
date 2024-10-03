@@ -5,27 +5,30 @@
 #define PORT_DEFAULT 3000
 #define PACKET_SIZE 128
 #define LOOKFOR_MAXPACKETS 16
+
 typedef uint8_t u8;
+typedef uint16_t u16;
 
 enum __attribute__((__packed__)) Packet_kind {
-    REQUEST, ACK, COMMAND, NAME, PLAYERINFO, GAMEINFO, CARD, HAND, MOVE, 
-    MOVERESULT, OUTCOME, LEADERBOARD, CORONATION
+    SERVER_PKT, CLIENT_PKT
 };
 enum __attribute__((__packed__)) Request_kind {
-    EVENT, NAME, MOVE
+    PNAME_RQ, PNAME_RETRY, MOVE_RQ, MOVE_RETRY, NO_RQ
+};
+enum __attribute__((__packed__)) Response_kind {
+    PNAME_RS, MOVE_RS, UPDATEME_RS
 };
 enum __attribute__((__packed__)) Event_kind {
-
+    GAME_START, PLAYED_CARD, PASS_OVER, ROUND_OVER, GAME_OVER
 };
-
 struct Packet {
-    enum Packet_kind kind;
-    u8 size;
-    char data[PACKET_SIZE - 2];
+    enum Packet_kind pk_kind;
+    char data[PACKET_SIZE - 1];
 } __attribute__((__packed__));
-struct Packet_request {
-    enum Request_kind;
-};
+    u8 msg_size;    // size 255 reserved for "message is too big" error 
+struct Packet_response {
+
+}
 struct Packet_name {
     u8 size;
     char name[PLAYERNAME_STRLEN];
