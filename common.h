@@ -1,7 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define PLAYERNAME_STRLEN 14
+#define PLAYERNAME_STRLEN 15
 #define DEFAULT_TARGET_SCORE 31
 
 typedef struct llist_node {

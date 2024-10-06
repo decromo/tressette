@@ -18,7 +18,7 @@ struct Player_net {
 
 struct Player_serv {
     int id;
-    char name[PLAYERNAME_STRLEN];
+    char name[PLAYERNAME_STRLEN + 1];
     int game_score;
     int round_score_thirds; // one point counts for three thirds
     int card_count;
@@ -27,16 +27,19 @@ struct Player_serv {
 };
 
 struct Game_serv {
-    int round;
     int player_count;
     bool team_game;
     int target_score;
+    int round;
+    int pass;
+    int turn;
     struct Card deck[40];
     struct Player_serv players[4];
 };
 
 void give_cards(struct Player_serv *pl, int pl_count, struct Card *deck);
 int select_pass_winner(struct Card **thrown, int n_thrown, int first_player_id);
+int net_send_playerinfo(Game_serv *g, u8 player_id);
 bool is_game_over_serv(struct Player_serv *ps, int n_players, int target);
 
 int net_get_playermove(struct Player_serv *p, int round, int pass);
