@@ -51,6 +51,14 @@ void llist_remove(void *list, void *node) {
     ll->size--;
 }
 
+void llist_init(void *list) {
+    llist *ll = list;
+    assert(ll != NULL);
+    ll->head = (llist_node*)ll;
+    ll->tail = (llist_node*)ll;
+    ll->size = 0;
+}
+
 void llist_nuke(void *list, void (fun)(void *node)) {
     llist *ll = list;
     llist_node *n;
@@ -64,7 +72,5 @@ void llist_nuke(void *list, void (fun)(void *node)) {
         llist_remove(ll, n);
     }
     // just to be sure
-    ll->head = (llist_node*)ll;
-    ll->tail = (llist_node*)ll;
-    ll->size = 0;
+    llist_init(list);
 }

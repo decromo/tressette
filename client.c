@@ -21,6 +21,9 @@
 #include "network.h"
 int admin_idx = 0;
 
+struct RS_packet_move Last_RS_move = {0};
+struct RS_packet_name Last_RS_name = {0};
+
 void dbg_selection(struct Card_node *head, int n_cards, int *selector_arr, int selection_id) {
     struct Card_node *cn = NULL;
     for (int i = 0; i < n_cards; i++) {

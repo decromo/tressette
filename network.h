@@ -18,10 +18,10 @@ enum __attribute__((__packed__)) Packet_kind {
     SERVER_PKT, CLIENT_PKT
 };
 enum __attribute__((__packed__)) Request_kind {
-    PNAME_RQ, PNAME_AGAIN, MOVE_RQ, MOVE_AGAIN, NO_RQ
+    NAME_RQ, NAME_AGAIN, MOVE_RQ, MOVE_AGAIN, NO_RQ
 };
 enum __attribute__((__packed__)) Response_kind {
-    PNAME_RS, PMOVE_RS, UPDATEME_RS
+    NAME_RS, MOVE_RS, UPDATEME_RS
 };
 enum __attribute__((__packed__)) Event_kind {
     WELCOME_CLIENT, GAME_START, PLAYED_CARD, PASS_OVER, ROUND_OVER, GAME_OVER, NO_EVENT
@@ -38,6 +38,7 @@ struct Game_status {
     u8 game_scores[4];
     u8 round_score_thirds[4];
 } __attribute__((__packed__));
+
 struct Packet_card {
     u8 id;
     u8 suit;
@@ -48,12 +49,13 @@ struct Packet_hand {
     u8 n_cards;
     struct Packet_card cards[20];
 } __attribute__((__packed__));
+
 struct Server_packet {
     enum Request_kind rq_kind;
     enum Event_kind ev_kind;
     struct Game_status status;
     struct Packet_hand hand;
-    char ev_size;
+    pk_size_t ev_size;
     char ev_data[];
 } __attribute__((__packed__));
 struct Client_packet {
@@ -63,10 +65,15 @@ struct Client_packet {
 } __attribute__((__packed__));
 struct Packet {
     enum Packet_kind pk_kind;
-    char data[PACKET_SIZE - 1];
+    char data[PACKET_SIZE - sizeof(enum Packet_kind)];
 } __attribute__((__packed__));
+struct PNode {
+    struct llist_node node;
+    struct Packet *pk;
+};
 
 struct RS_packet_name {
+    u8 name_size;
     char name[16];
 } __attribute__((__packed__));
 struct RS_packet_move {
@@ -94,7 +101,9 @@ struct EV_packet_gameover {
     u8 winner_id;
 } __attribute__((__packed__));
 
-static inline size_t event_sizeof(enum Event_kind k) {
+
+// WELCOME_CLIENT, GAME_START, PLAYED_CARD, PASS_OVER, ROUND_OVER, GAME_OVER, NO_EVENT
+static inline pk_size_t event_sizeof(enum Event_kind k) {
     switch (k) {
         case WELCOME_CLIENT: return sizeof(struct EV_packet_playerinfo);
         case GAME_START: return 0;
@@ -105,15 +114,31 @@ static inline size_t event_sizeof(enum Event_kind k) {
         case NO_EVENT: return 0;
     }
 }
+static inline const char *event_nameof(enum Event_kind k) {
+    switch (k) {
+        case WELCOME_CLIENT: return "welcomeclient";
+        case GAME_START: return "gamestart";
+        case PLAYED_CARD: return "playedcard";
+        case PASS_OVER: return "passover";
+        case ROUND_OVER: return "roundover";
+        case GAME_OVER: return "gameover";
+        case NO_EVENT: return "noevent";
+    }
+}
+// NAME_RQ, NAME_AGAIN, MOVE_RQ, MOVE_AGAIN, NO_RQ
+static inline const char *request_nameof(enum Request_kind k) {
+    switch (k) {
+        case NAME_RQ: return "name";
+        case NAME_AGAIN: return "name_again";
+        case MOVE_RQ: return "move";
+        case MOVE_AGAIN: return "move_again";
+        case NO_RQ: return "norequest";
+    }
+}
 
-struct PNode {
-    struct llist_node node;
-    struct Packet *pk;
-};
-
-struct Packet *net_recv_packet(int sock);
 int net_send_packet(int sock, struct Packet *packet);
-struct PNode *net_need_packetkind(enum Packet_kind kind, llist *q, int n, bool wait, int sock);
+void thread_recv_main(void *pk_q_void);
+struct Packet *net_recv_packet(int sock);
 
 // struct Packet_reconnect_request {
 

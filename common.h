@@ -40,6 +40,13 @@ struct Player {
     llist hand;
 };
 
+struct PQueue {
+    llist queue;
+    int socket;
+    pthread_mutex_t lock;
+    pthread_t pt_id;
+};
+
 int fd_unset_nonblocking(int fd, int *flags_ptr);
 int fd_set_nonblocking(int fd, int *flags_ptr);
 int flush_istream(int fd);
@@ -47,6 +54,7 @@ int flush_istream(int fd);
 void llist_add(void *list, void *node);
 void llist_append(void *list, void *node);
 void llist_remove(void *list, void *node);
+void llist_init(void *list);
 void llist_nuke(void *list, void (fun)(void *node));
 
 char *suit_to_string(enum Suits s);

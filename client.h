@@ -13,8 +13,6 @@ struct Player_client {
 };
 
 struct Game_client {
-    int socket;
-    llist queue;
     int player_count;
     bool team_game;
     int target_score;
@@ -23,6 +21,8 @@ struct Game_client {
     int my_id;
     struct Player_client players[4];
     struct Card deck[40];
+    struct PQueue queue;
 };
+
 
 #endif // CLIENT_H
