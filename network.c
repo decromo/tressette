@@ -10,13 +10,14 @@
 
 
 #ifdef __MINGW32__
-    #include "windef.h"
+#include "windef.h"
 #else
-    #include <sys/socket.h>
+#include <sys/socket.h>
 #endif // __MINGW32__
 
 #include "common.h"
 #include "network.h"
+#include "threads.h"
 
 // struct Packet *net_recv_packet(int sock) {
 //     const int recv_size = 32;
@@ -58,15 +59,15 @@
 //}
 
 // TODO: cleanup thread, mutex, attr, and socket maybe?
-void thread_recv_main(void *pk_q_void) {
+void *thread_recv_main(void *pk_q_void) {
     struct PQueue *pk_q = pk_q_void;
-    struct pollfd pollfd = { .fd = pk_q->socket, .events = POLLIN, .revents = 0};
-    
+    struct pollfd pollfd = { .fd = pk_q->socket, .events = POLLIN, .revents = 0 };
+
     while (true) {
-        switch(poll(&pollfd, 1, -1)) {
-            case 0: sleep(1); fprintf(stderr, "INFO: poll() returned 0\n"); continue;
-            case 1: break;
-            default: perror("poll"); assert(false);
+        switch (poll(&pollfd, 1, -1)) {
+        case 0: sleep(1); fprintf(stderr, "INFO: poll() returned 0\n"); continue;
+        case 1: break;
+        default: perror("poll"); assert(false);
         }
         if (pollfd.revents != 0) {
             if (pollfd.revents & POLLIN) {
@@ -77,8 +78,7 @@ void thread_recv_main(void *pk_q_void) {
                 pthread_mutex_lock(&pk_q->lock);
                 llist_append(&pk_q->queue, &pn->node);
                 pthread_mutex_unlock(&pk_q->lock);
-            }
-            else {
+            } else {
                 if (pollfd.revents & POLLHUP) {
                     // finish reading and let main know peer closed stream
                 }
@@ -121,14 +121,13 @@ struct Packet *net_recv_packet(int sock) {
         //         break;
         // }
         recived += res;
-        res = 0;
     }
 
     struct Packet *pbuf = calloc(1, PACKET_SIZE);
     assert(pbuf != NULL);
-    char *ptr = (char*)pbuf;
+    char *ptr = (char *)pbuf;
     for (int i = 0; i < PACKET_SIZE; i++) {
-        ptr[i] = buf[PACKET_SIZE-1 - i];
+        ptr[i] = buf[PACKET_SIZE - 1 - i];
     }
 
     return pbuf;
@@ -140,11 +139,11 @@ int net_send_packet(int sock, struct Packet *packet) {
 
     // set the non-data bytes
     buf[data_bytes] = packet->pk_kind;
-    char *data = (char*)packet->data;
+    char *data = (char *)packet->data;
 
     // set the data bytes
     for (int i = 1; i <= data_bytes; i++) {
-        buf[data_bytes - i] = data[i-1];
+        buf[data_bytes - i] = data[i - 1];
     }
     int sent = 0,
         res = 0;
@@ -155,7 +154,6 @@ int net_send_packet(int sock, struct Packet *packet) {
             return -1;
         }
         sent += res;
-        res = 0;
     }
     return 0;
 }

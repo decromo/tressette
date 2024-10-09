@@ -3,25 +3,23 @@
 
 #include "common.h"
 
-struct Player_client {
-    int id;
-    char name[PLAYERNAME_STRLEN];
-    int game_score;
-    int round_score_thirds; // one point counts for three thirds
-    int card_count;
-    llist hand;
-};
-
 struct Game_client {
-    int player_count;
-    bool team_game;
-    int target_score;
+    /* const */ int player_count;
+    /* const */ bool is_team_game;
+    /* const */ int target_score;
+    /* const */ struct Card deck[40];
     int round;
     int pass;
-    int my_id;
-    struct Player_client players[4];
-    struct Card deck[40];
-    struct PQueue queue;
+    struct Card *pass_cards[4];
+    enum Suits pass_suit;
+    int pass_master;
+    int turn_idx;
+    int turn_counter;
+    char names[4][PLAYERNAME_STRLEN + 1];
+    int game_scores[4];
+    int round_score_thirds[4];
+    struct Player player;
+    int hand_selectors[20];
 };
 
 

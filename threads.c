@@ -1,8 +1,9 @@
 #define _GNU_SOURCE
-#include <pthread.h>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <assert.h>
 
 #include "network.h"
 #include "threads.h"
@@ -19,8 +20,8 @@ pthread_t thread_recv_init(struct PQueue *pk_q, int sockfd) {
     assert(res == 0);
 
     llist_init(&pk_q->queue);
-    
-    pk_q->lock = (pthread_mutex_t) PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP;
+
+    pk_q->lock = (pthread_mutex_t)PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP;
 
     pk_q->socket = sockfd;
 
@@ -32,3 +33,12 @@ pthread_t thread_recv_init(struct PQueue *pk_q, int sockfd) {
     return pk_q->pt_id;
 }
 
+struct Packet *pop_packet(struct PQueue *pq) {
+    if (pq->queue.size == 0 || pq->queue.head == (struct llist_node*) &pq->queue)
+        return NULL;
+
+    struct Packet *ret = ((struct PNode*) pq->queue.head)->pk;
+    llist_mtsafe(pq, remove, pq->queue.head);
+
+    return ret;
+}

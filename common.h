@@ -4,6 +4,10 @@
 #define PLAYERNAME_STRLEN 15
 #define DEFAULT_TARGET_SCORE 31
 
+#include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
 typedef struct llist_node {
     struct llist_node *next;
     struct llist_node *prev;
@@ -32,20 +36,29 @@ struct Card {
     enum Suits suit;
 };
 
+struct PQueue {
+    int socket;
+    llist queue;
+    pthread_mutex_t lock;
+    pthread_t pt_id;
+};
+
+struct Player_netinfo {
+    struct PQueue pk_queue;
+    struct sockaddr_in addr;
+    socklen_t addr_len;
+};
+
 struct Player {
     int id;
+    char name[PLAYERNAME_STRLEN + 1];
     int game_score;
     int round_score_thirds; // one point counts for three thirds
     int card_count;
     llist hand;
+    struct Player_netinfo netinfo;
 };
 
-struct PQueue {
-    llist queue;
-    int socket;
-    pthread_mutex_t lock;
-    pthread_t pt_id;
-};
 
 int fd_unset_nonblocking(int fd, int *flags_ptr);
 int fd_set_nonblocking(int fd, int *flags_ptr);

@@ -57,7 +57,7 @@ int flush_istream(int fd) {
 
     while (bytes_read != -1)
         bytes_read = read(fd, &c, 1);
-    
+
     if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
         perror("read() failed");
         res = -1;
@@ -72,37 +72,37 @@ int flush_istream(int fd) {
 char *suit_to_string(enum Suits s) {
     static char string[64] = "null";
     switch (s) {
-        case DENARA:
-            strcpy(string, "Denara");
-            break;
-        case COPPE:
-            strcpy(string, "Coppe");
-            break;
-        case BASTONI:
-            strcpy(string, "Bastoni");
-            break;
-        case SPADE:
-            strcpy(string, "Spade");
-            break;
+    case DENARA:
+        strcpy(string, "Denara");
+        break;
+    case COPPE:
+        strcpy(string, "Coppe");
+        break;
+    case BASTONI:
+        strcpy(string, "Bastoni");
+        break;
+    case SPADE:
+        strcpy(string, "Spade");
+        break;
     };
     return string;
 }
 void initialize_deck(struct Card *cs) {
     memset(cs, 0, 40 * sizeof(struct Card));
     for (int i = 0; i < 40; i++) {
-        cs[i] = (struct Card) { .value = i % 10, .suit = i / 10 };
+        cs[i] = (struct Card){ .value = i % 10, .suit = i / 10 };
     }
 }
 int calculate_pass_value(struct Card **thrown, int n_thrown) {
     int pass_value = 0;
     for (int i = 0; i < n_thrown; i++) {
-        switch(thrown[i]->value) {
-            case 1: case 2: case 7: case 8: case 9:
-                pass_value += 1;
-                break;
-            case 0:
-                pass_value += 3;
-                break;
+        switch (thrown[i]->value) {
+        case 1: case 2: case 7: case 8: case 9:
+            pass_value += 1;
+            break;
+        case 0:
+            pass_value += 3;
+            break;
         }
     }
     return pass_value;
@@ -113,26 +113,26 @@ struct Card_node *find_valid_card(struct Card_node *head, int n_cards, int card_
         return NULL;
     }
 
-    bool flying[4] = {true, true, true, true};
+    bool flying[4] = { true, true, true, true };
     struct Card_node *cn = head;
     for (int i = 0; i < n_cards; i++) {
         assert(cn != NULL);
         flying[cn->c->suit] = false;
-        cn = (struct Card_node*) cn->node.next;
+        cn = (struct Card_node *)cn->node.next;
     }
 
-    cn = (struct Card_node*) head;
+    cn = (struct Card_node *)head;
     for (int i = 0; i < n_cards; i++) {
         assert(cn != NULL);
         printf("flying on %s %s\n", suit_to_string(cn->c->suit), flying[cn->c->suit] ? "true" : "false");
         if (i != card_id) {
-            cn = (struct Card_node*) cn->node.next;
+            cn = (struct Card_node *)cn->node.next;
             continue;
         }
         if ((pass_suit == -1) || (cn->c->suit == pass_suit) || (flying[pass_suit] == true)) {
             return cn;
         }
-        printf("Can't play %d of %s:%d on ", cn->c->value+1, suit_to_string(cn->c->suit), cn->c->suit);
+        printf("Can't play %d of %s:%d on ", cn->c->value + 1, suit_to_string(cn->c->suit), cn->c->suit);
         printf("%s:%d\n", suit_to_string(pass_suit), pass_suit);
 
         // TODO: take this out of the shared function
