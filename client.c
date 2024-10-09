@@ -96,58 +96,6 @@ int client_prompt_move(struct Player *p, enum Suits main_suit) {
     return selection - 1;
 }
 
-// int net_get_hand(struct Game_client *game) {
-//     struct PNode *pn;
-//     struct Packet_hand *phd;
-//     struct Player_client *p = &game->players[game->my_id];
-//     int i = 0;
-//     int deltaround;
-
-//     for (int i = 0; i < LOOKFOR_MAXPACKETS; i++) {
-//         pn = net_need_packetkind(HAND, &game->queue, 0, true, game->socket);
-//         assert(pn != NULL);
-//         phd = (struct Packet_hand *)pn->pk->data;
-//         deltaround = phd->round - game->round;
-//         if (deltaround < 0) {
-//             free(pn->pk);
-//             llist_remove(&game->queue, pn);
-//             i--;
-//             continue;
-//         }
-//         if (deltaround == 0) {
-//             p->card_count = phd->n_cards;
-//             llist_nuke(&p->hand, NULL);
-
-//             struct Card_node *cn;
-//             struct Packet_card incoming_card;
-//             enum Suits ic_suit;
-//             int ic_val;
-//             for (int i = 0; i < p->card_count; i++) {
-//                 cn = calloc(1, sizeof(struct Card_node));
-//                 assert(cn != NULL);
-//                 assert(phd->cards[i].id == i); // TEMP
-//                 ic_suit = phd->cards[i].suit;
-//                 ic_val = phd->cards[i].val;
-//                 cn->c = &game->deck[ic_suit * 10 + ic_val];
-//                 llist_append(&p->hand, (llist_node *)cn);
-//             }
-//             free(pn->pk);
-//             llist_remove(&game->queue, pn);
-//             return 0;
-//         }
-//     }
-//     return -1;
-// }
-struct Card *net_get_moveresult(struct Game_client *game) {  // deck card pointer success, NULL could not find packet
-}
-int net_get_outcome(struct Game_client *game) {  // ret: winner_id success; -1
-    // could not find packet
-}
-int net_get_leaderboard(struct Game_client *game) {  // ret: 0 success; -1 couldnt find packet
-}
-int net_get_coronation(struct Game_client *game) {  // ret: winner_id
-}
-
 int client_connect(struct Player_netinfo *netinfo, char *addr, char *port) {
     int sockfd = -1, res = 0, one = 1;
     struct addrinfo hints, *ai_res, *ain;
@@ -209,6 +157,8 @@ void client_setup_game(struct Game_client *g, int servsock) {
 
     g->player.id = -1;  // waiting for this to get set by a welcome event packet
 
+    llist_init(&g->player.hand);
+
     thread_recv_init(&g->player.netinfo.pk_queue, servsock);
     // FIXME
     // printf("Waiting for acknowledgement...");
@@ -238,7 +188,7 @@ void game_organize_hand(struct llist *hand, int selector_arr[20], bool print) {
     char suits_remaining[5] = "AAAA";
 
     enum Suits cs = -1;
-    struct Card_node *cn = hand->head;
+    struct Card_node *cn = (struct Card_node *)hand->head;
     for (int i = 0; i < hand->size; i++) {
         assert(cn != NULL);
         cs = cn->c->suit;
@@ -297,10 +247,24 @@ void client_apply_state(struct Game_client *g, struct Game_status *s, struct Pac
     g->turn_idx = s->turn_idx;
     g->turn_counter = s->turn_counter;
     for (int i = 0; i < 4; i++) {
-        memcpy(&g->pass_cards[i], &s->pass_cards[i], sizeof(s->pass_cards[i]));
+        g->pass_cards[i] = &g->deck[s->pass_cards[i].suit * 10 + s->pass_cards[i].val];
         strncpy(g->names[i], s->names[i], PLAYERNAME_STRLEN);
         g->game_scores[i] = s->game_scores[i];
         g->round_score_thirds[i] = s->round_score_thirds[i];
+    }
+
+    g->player.card_count = hand->n_cards;
+    g->player.game_score = s->game_scores[g->player.id];
+    g->player.round_score_thirds = s->round_score_thirds[g->player.id];
+
+    llist_nuke(&g->player.hand, NULL);  // is this fine without a fun?
+    struct Card_node *cnp;
+    for (int i = 0; i < hand->n_cards; i++) {
+        cnp = malloc(sizeof(struct Card_node));
+        assert(cnp != NULL);
+
+        cnp->c = &g->deck[hand->cards[i].suit * 10 + hand->cards[i].val];
+        llist_append(&g->player.hand, (llist_node *)cnp);
     }
 }
 void client_handle_packets(struct Game_client *g) {
@@ -313,6 +277,11 @@ void client_handle_packets(struct Game_client *g) {
     while (game_over == false) {
         // get a packet from the recv thread and free its node
         packet = pop_packet(&g->player.netinfo.pk_queue);
+
+        if (packet == NULL) {
+            usleep(300);
+            continue;
+        }
 
         // only read server packets
         if (packet->pk_kind != SERVER_PKT) {
@@ -336,9 +305,10 @@ void client_handle_packets(struct Game_client *g) {
             game_organize_hand(&g->player.hand, g->hand_selectors, true);
             printf("Your last move was invalid, try again.\n");
         case RQ_MOVE:
+            game_organize_hand(&g->player.hand, g->hand_selectors, false);
             last_RS_move.round = g->round;
             last_RS_move.pass = g->pass;
-            last_RS_move.card_id = g->hand_selectors[(&g->player, g->pass_suit)];
+            last_RS_move.card_id = g->hand_selectors[client_prompt_move(&g->player, g->pass_suit)];
         case RQ_MOVE_AGAIN:
             net_contact_server(g, RS_MOVE, &last_RS_move);
             break;
@@ -352,31 +322,31 @@ void client_handle_packets(struct Game_client *g) {
             g->player.id = ((struct EV_packet_welcome *)sp->ev_data)->id;
             break;
         case EV_GAME_START:
-            printf("Game is starting !!");
+            printf("Game is starting !!\n");
             break;
         case EV_GAME_OVER:
             client_game_over(g, (struct EV_packet_gameover *)sp->ev_data, 
-                sp->status.names, sp->status.game_scores);
+                &sp->status.names, &sp->status.game_scores);
             game_over = true;
             break;
         case EV_ROUND_START:
-            printf("Cards are given.");
+            printf("Cards are given.\n");
             break;
         case EV_ROUND_OVER:
-            client_round_over(g, (struct EV_packet_welcome *)sp->ev_data, sp->status.names);
+            client_round_over(g, (struct EV_packet_roundover *)sp->ev_data, &sp->status.names);
             break;
         case EV_PASS_START:
-            game_organize_hand(&g->player.hand, g->hand_selectors, true);
             game_print_roundpass(g->round, g->pass);
+            game_organize_hand(&g->player.hand, g->hand_selectors, true);
             break;
         case EV_PASS_OVER:
-            client_pass_over(g, (struct EV_packet_passover *)sp->ev_data, sp->status.names);
+            client_pass_over(g, (struct EV_packet_passover *)sp->ev_data, &sp->status.names);
             break;
         case EV_TURN_START:
-            client_turn_start(g, (struct EV_packet_turnstart *)sp->ev_data, sp->status.names);
+            client_turn_start(g, (struct EV_packet_turnstart *)sp->ev_data, &sp->status.names);
             break;
         case EV_PLAYED_CARD:
-            client_played_card(g, (struct EV_packet_playedcard *)sp->ev_data, sp->status.names);
+            client_played_card(g, (struct EV_packet_playedcard *)sp->ev_data, &sp->status.names);
         case EV_NONE:
             break;
         }
@@ -386,16 +356,16 @@ void client_handle_packets(struct Game_client *g) {
 }
 
 // depends on g.player_count; TODO: call end game routine??
-void client_game_over(struct Game_client *g, struct EV_packet_gameover *evp, char (*names)[4], char (*scores)[4]) {
-    printf("** GAME OVER: %s won with %d points. **\n", names[evp->winner_id], scores[evp->winner_id]);
+void client_game_over(struct Game_client *g, struct EV_packet_gameover *evp, char (*names)[4][PLAYERNAME_STRLEN+1], unsigned char (*scores)[4]) {
+    printf("** GAME OVER: %s won with %d points. **\n", *names[evp->winner_id], scores[evp->winner_id]);
     printf("----- final scores -----\n");
     for (int i = 0; i < g->player_count; i++) {
-        printf("| %s with %d points \t\t|\n", names[evp->winner_id], scores[evp->winner_id]);
+        printf("| %s with %d points \t\t|\n", *names[evp->winner_id], scores[evp->winner_id]);
     }
     printf("------------------------\n");
 }
 // depends on g.player_count
-void client_round_over(struct Game_client *g, struct EV_packet_roundover *evp, char (*names)[4]) {
+void client_round_over(struct Game_client *g, struct EV_packet_roundover *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
     printf("--- round %d net gains ---\n", evp->round);
     for (int i = 0; i < g->player_count; i++) {
         printf("| %s gained %d points \t\t|\n", *names[i], evp->score_deltas[i]);
@@ -403,11 +373,11 @@ void client_round_over(struct Game_client *g, struct EV_packet_roundover *evp, c
     printf("-------------------------\n");
 }
 // depends on g.pass_cards
-void client_pass_over(struct Game_client *g, struct EV_packet_passover *evp, char (*names)[4]) {
+void client_pass_over(struct Game_client *g, struct EV_packet_passover *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
     if (g->player.id == evp->winner_id) {
         printf("--- You won this pass with ");
     } else {
-        printf("--- Pass goes to %s with ", names[evp->winner_id]);
+        printf("--- Pass goes to %s with ", *names[evp->winner_id]);
     }
     printf("%d of %s, got %d",
         g->pass_cards[evp->winner_id]->value + 1,
@@ -418,22 +388,22 @@ void client_pass_over(struct Game_client *g, struct EV_packet_passover *evp, cha
     printf(" points ---\n");
 }
 // organizes hand selectors
-void client_turn_start(struct Game_client *g, struct EV_packet_turnstart *evp, char (*names)[4]) {
+void client_turn_start(struct Game_client *g, struct EV_packet_turnstart *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
     if (evp->who == g->player.id) {
         // TODO: make better prompt
         printf("It's your turn\n");
     } else {
-        printf("It's %s's turn.\n", names[evp->who]);
+        printf("It's %s's turn.\n", *names[evp->who]);
     }
 }
 // depends on g.turn_counter: needs to be the turn where the card was played
-void client_played_card(struct Game_client *g, struct EV_packet_playedcard *evp, char (*names)[4]) {
+void client_played_card(struct Game_client *g, struct EV_packet_playedcard *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
     if (evp->whose == g->player.id) {
         printf("You played ");
     } else {
-        printf("%s played ", names[evp->whose]);
+        printf("%s played ", *names[evp->whose]);
     }
-    printf("%d of %s.\n", evp->card.id + 1, suit_to_string(evp->card.suit));
+    printf("%d of %s.\n", evp->card.val + 1, suit_to_string(evp->card.suit));
     if (g->turn_counter == 0) {
         printf("This pass will be played on %s.\n", suit_to_string(evp->card.suit));
     }

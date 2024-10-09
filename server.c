@@ -100,7 +100,7 @@ void serv_simulate_round(struct Game_serv *g) {
             turn_player = &g->players[g->turn_idx];
 
             net_notify_clients(g, NULL, 0, RQ_NONE, 
-                EV_ROUND_START, &(struct EV_packet_turnstart) {.who = g->turn_idx});
+                EV_TURN_START, &(struct EV_packet_turnstart) {.who = g->turn_idx});
 
             bool response_invalid = false;
             do {
@@ -380,9 +380,11 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
         p->netinfo.addr = ps_addr[i];
         p->netinfo.addr_len = ps_len[i];
         thread_recv_init(&p->netinfo.pk_queue, ps_sock[i]);
+        errors += net_notify_clients(g, (int[]) { p->id }, 1, RQ_NAME, EV_WELCOME, &(struct EV_packet_welcome) { .id = p->id });
+    }
+    for (int i = 0; i < n_players; i++) {
+        struct Player *p = &g->players[i];
         net_get_playername(p, PLAYERNAME_STRLEN);
-        printf("INFO: Player %d will call themselves %s.\n", i, p->name);
-        errors += net_notify_clients(g, (int[]) { p->id }, 1, RQ_NONE, EV_WELCOME, &(struct EV_packet_welcome) { .id = p->id });
     }
     return errors;
 }
@@ -402,11 +404,16 @@ void server_end_game(struct Game_serv *g) {
 
     assert(winner_id >= 0);
     assert(g->players[winner_id].game_score >= g->target_score);
-    net_notify_clients(g, NULL, 0, RQ_NONE, EV_GAME_OVER, &(struct EV_packet_gameover){.winner_id = winner_id});
-    // net_send_coronation(g->players, g->player_count, NULL, winner_id);
+    net_notify_clients(g, NULL, 0, RQ_NONE, EV_GAME_OVER, 
+        &(struct EV_packet_gameover){.winner_id = winner_id});
 
-    for (int i = 0; i < g->player_count; i++)
-        close(g->players[i].netinfo.pk_queue.socket); // FIXME: test possible race conditions / other complications after sockets close
+    for (int i = 0; i < g->player_count; i++){
+        llist_nuke(&g->players[i].hand, NULL);
+        // TODO: clean everything else up
+
+        // FIXME: test possible race conditions / other complications after sockets close
+        close(g->players[i].netinfo.pk_queue.socket); 
+        }
     printf("INFO: Game over.\nINFO: A new game will begin soon, please make everyone reconnect...\n");
 }
 int main(int argc, char **argv) {

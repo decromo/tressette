@@ -35,6 +35,7 @@ struct Packet *net_serv_forge_packet(struct Game_serv *g, struct Player *p) {
     sp->status.pass_suit = g->pass_suit;
     sp->status.pass_master = g->pass_master;
     for (int i = 0; i < 4; i++) {
+        if (g->pass_cards[i] == NULL) continue;
         sp->status.pass_cards[i].suit = g->pass_cards[i]->suit;
         sp->status.pass_cards[i].val = g->pass_cards[i]->value;
     }
@@ -61,7 +62,7 @@ int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
     int whom_all[] = { 0, 1, 2, 3 };
     if (whom == NULL) {
         whom = whom_all;
-        n_whom = 4;
+        n_whom = g->player_count;
     }
 
     struct Packet *packets[4] = { 0 };
@@ -80,10 +81,10 @@ int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
         sock = p->netinfo.pk_queue.socket;
         printf("TRAC: Sending a ");
         if (rq_kind != RQ_NONE) {
-            printf("/ %s \\", request_nameof(rq_kind));
+            printf("/rq:%s\\", request_nameof(rq_kind));
         }
         if (ev_kind != EV_NONE) {
-            printf("\\ %s /", event_nameof(ev_kind));
+            printf("\\ev:%s/", event_nameof(ev_kind));
         }
         printf(" packet to %d:%s\n", p->id, p->name);
 
@@ -99,11 +100,20 @@ int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
 // TODO: timeout?
 struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_q, int n, bool wait) {
     int n_found = 0;
-    struct PNode *pn = (struct PNode *)pk_q->queue.head;
+    
     while (n_found <= n) {
         const size_t known_queue_size = pk_q->queue.size;
+        struct PNode *pn = (struct PNode *)pk_q->queue.head;
         for (int i = 0; i < known_queue_size; pn = (struct PNode*)pn->node.next, i++) {
-            assert(pn != NULL && pn->pk != NULL);
+            assert(pn != NULL);
+
+            // this is ugly but needed since pn will always point to the list head if this thread was blocked with an empty queue waiting for a first packet.
+            if (pn == (struct PNode *)&pk_q->queue.head) {
+                // if pn points to the head, we will restart the loop. this probably applies only if wait is true
+                break;
+            }
+
+            assert(pn->pk != NULL);
 
             // only accept client_pkt's, remove the others from queue by acquiring its lock
             if (pn->pk->pk_kind != CLIENT_PKT) {

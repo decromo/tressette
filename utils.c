@@ -40,7 +40,7 @@ void llist_pop(void *list) {
     assert(n != NULL);
 
     assert(ll->size >= 0);
-    if (ll->size == 0 || ll == n) return;
+    if (ll->size == 0 || list == n) return;
 
     if (n->next != NULL) {
         n->next->prev = n->prev;
@@ -61,7 +61,7 @@ void llist_remove(void *list, void *node) {
     llist_node *n = node;
 
     assert(ll->size >= 0);
-    if (ll->size == 0 || ll == n) return;
+    if (ll->size == 0 || list == n) return;
 
     if (n->next != NULL) {
         n->next->prev = n->prev;
