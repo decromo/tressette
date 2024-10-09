@@ -59,7 +59,9 @@ int net_contact_server(struct Game_client *g, enum Response_kind rs_k, void *rs_
     int errors = 0;
     
     struct Packet packet = {0};
+    packet.pk_kind = CLIENT_PKT;
     struct Client_packet *cp = (struct Client_packet *)&packet.data;
+
     cp->rs_kind = rs_k;
     cp->rs_size = response_sizeof(rs_k);
     if (rs_args != NULL) {

@@ -1,4 +1,5 @@
 
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,10 +26,15 @@
 #include "common.h"
 #include "network.h"
 #include "threads.h"
+#include "pthread.h"
 
 // int admin_idx = 0;
 
 // TODO: look into accept4()
+
+void serv_shutdown_game(struct Game_serv *g) {
+    g->target_score = 0;
+}
 
 void give_cards(struct Player ps[2], int n_pl, struct Card *deck) {
     int shuffled_order[40];
@@ -100,18 +106,21 @@ void serv_simulate_round(struct Game_serv *g) {
             turn_player = &g->players[g->turn_idx];
 
             net_notify_clients(g, NULL, 0, RQ_NONE, 
-                EV_ROUND_START, &(struct EV_packet_turnstart) {.who = g->turn_idx});
+                EV_TURN_START, &(struct EV_packet_turnstart) {.who = g->turn_idx});
 
             bool response_invalid = false;
             do {
                 net_notify_clients(g, (int[]) { g->turn_idx }, 1,
                     response_invalid ? RQ_MOVE_INVALID : RQ_MOVE, EV_NONE, NULL);
+
                 turn_card_id = net_get_playermove(turn_player, g->round, g->pass);
                 assert(turn_card_id != -1);
                 turn_card = find_valid_card((struct Card_node *)turn_player->hand.head,
                     turn_player->card_count, turn_card_id, g->pass_suit);
+
                 response_invalid = true;  // setting this true so we can make a different request if we loop
             } while (turn_card == NULL);
+
             printf("NOTE: Played card is %d of %s:%d\n", turn_card->c->value + 1, suit_to_string(turn_card->c->suit), turn_card->c->value);
 
             // set the first card thrown as the main suit
@@ -175,7 +184,7 @@ int select_pass_winner(struct Card **thrown, int n_thrown, int pass_master_idx) 
     enum Suits main_suit = thrown[pass_master_idx]->suit;
     int winning_player = pass_master_idx;
     int winning_strenght = thrown[pass_master_idx]->value;
-    printf("TRAC: Main Suit is %s, from Player %d.", suit_to_string(main_suit), pass_master_idx);
+    printf("TRAC: Main suit is %s, from Player %d\n", suit_to_string(main_suit), pass_master_idx);
     int card_strenght;
     for (int i = 0; i < n_thrown; i++) {
         printf("TRAC: %d played %d of %s", i, thrown[i]->value + 1, suit_to_string(thrown[i]->suit));
@@ -193,7 +202,6 @@ int select_pass_winner(struct Card **thrown, int n_thrown, int pass_master_idx) 
         }
         printf("\n");
     }
-    printf("\n");
     return winning_player;
 }
 bool is_game_over_serv(struct Player ps[1], int n_players, int target) {
@@ -268,7 +276,7 @@ int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, sock
     printf("TRAC: Waiting for players...\n");
     fd_set_nonblocking(fileno(stdin), &stdin_fd_flags);
     while (n < 4) {
-        res = accept(listen_sock, &addr[n], &len[n]);
+        res = accept(listen_sock, (struct sockaddr *)&addr[n], &len[n]);
         if (res != -1) {
             printf("\nQUST: A new player connected, ");
             fflush(stdout);
@@ -289,7 +297,7 @@ int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, sock
             } else {
                 printf("start a game with %d players? [y/n]: ", n);
                 fflush(stdout);
-                flush_istream(fileno(stdin));
+                flush_instream(fileno(stdin));
             }
         }
         if (errno != EAGAIN || errno != EWOULDBLOCK) {
@@ -311,7 +319,7 @@ int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, sock
             case 'n':
                 printf("QUST: Start a game with %d players? [y/n]: ", n);
                 fflush(stdout);
-                flush_istream(fileno(stdin));
+                flush_instream(fileno(stdin));
             case -1:
                 continue;
             }
@@ -330,6 +338,7 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
     socklen_t ps_len[4] = { 0 };
 
     n_players = serv_wait_players(listen_sock, ps_sock, ps_addr, ps_len);
+    g->listen_sock = listen_sock;
 
     // ask about having a team game or not
     bool teamgame_answer = false;
@@ -337,7 +346,7 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
         char answ;
     prompt_teamgame:
         printf("QUST: Do you want to have a team game? [y/n]: ");
-        flush_istream(fileno(stdin));
+        flush_instream(fileno(stdin));
         answ = fgetc(stdin);
         switch (answ) {
         case 'Y':
@@ -357,7 +366,6 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
     // set other default values
     g->round = 0;
     g->pass = 0;
-    memset(g->pass_cards, 0, sizeof(g->pass_cards));
     g->pass_suit = -1;
     g->pass_master = 0;
     g->turn_counter = 0;
@@ -366,12 +374,17 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
     g->team_game = teamgame_answer;
     g->target_score = DEFAULT_TARGET_SCORE;
 
+    // zero out some other fields
+    memset(g->pass_cards, 0, sizeof(g->pass_cards));
+    memset(&g->players, 0, 4 * sizeof(struct Player));
+    memset(&g->disconnected_players, 0, 4 * sizeof(struct Player *));
+
     // setup virgin deck
     memset(&g->deck, 0, 40 * sizeof(struct Card));
     initialize_deck(g->deck);
 
+
     // setup player structs, start the relative recv threads and get their names
-    memset(&g->players, 0, 4 * sizeof(struct Player));
     for (int i = 0; i < n_players; i++) {
         struct Player *p = &g->players[i];
         p->id = i;
@@ -380,9 +393,12 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
         p->netinfo.addr = ps_addr[i];
         p->netinfo.addr_len = ps_len[i];
         thread_recv_init(&p->netinfo.pk_queue, ps_sock[i]);
-        net_get_playername(p, PLAYERNAME_STRLEN);
-        printf("INFO: Player %d will call themselves %s.\n", i, p->name);
-        errors += net_notify_clients(g, (int[]) { p->id }, 1, RQ_NONE, EV_WELCOME, &(struct EV_packet_welcome) { .id = p->id });
+        sleep(1); // this fixes the possible race condition :)
+        errors += net_notify_clients(g, (int[]) { p->id }, 1, RQ_NAME, EV_WELCOME, &(struct EV_packet_welcome) { .id = p->id });
+    }
+    for (int i = 0; i < n_players; i++) {
+        struct Player *p = &g->players[i];
+        net_get_playername(p, PLAYERNAME_STRLEN + 1);
     }
     return errors;
 }
@@ -402,11 +418,16 @@ void server_end_game(struct Game_serv *g) {
 
     assert(winner_id >= 0);
     assert(g->players[winner_id].game_score >= g->target_score);
-    net_notify_clients(g, NULL, 0, RQ_NONE, EV_GAME_OVER, &(struct EV_packet_gameover){.winner_id = winner_id});
-    // net_send_coronation(g->players, g->player_count, NULL, winner_id);
+    net_notify_clients(g, NULL, 0, RQ_NONE, EV_GAME_OVER, 
+        &(struct EV_packet_gameover){.winner_id = winner_id});
 
-    for (int i = 0; i < g->player_count; i++)
-        close(g->players[i].netinfo.pk_queue.socket); // FIXME: test possible race conditions / other complications after sockets close
+    for (int i = 0; i < g->player_count; i++) {
+        llist_nuke(&g->players[i].hand, NULL);
+        pthread_cancel(g->players[i].netinfo.pk_queue.pt_id);
+        
+        // the thread should take care of all of this
+        // close(g->players[i].netinfo.pk_queue.socket); 
+    }
     printf("INFO: Game over.\nINFO: A new game will begin soon, please make everyone reconnect...\n");
 }
 int main(int argc, char **argv) {

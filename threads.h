@@ -13,6 +13,8 @@ typedef uint8_t u8;
     } while (0);
 
 pthread_t thread_recv_init(struct PQueue *pk_q, int sockfd);
+void *thread_recv_main(void *pk_q_void);
+void thread_recv_destroy(void *arg);
 struct Packet *pop_packet(struct PQueue *pq);
 
 #endif // THREADS_H
