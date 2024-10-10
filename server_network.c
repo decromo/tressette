@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <unistd.h>
+#include <unistd.h>
 
 
 #ifdef __MINGW32__
@@ -21,6 +22,103 @@
 #include "threads.h"
 #include "server.h"
 #include "server_network.h"
+
+bool handle_disconnections(void *arg) {
+    /*tmp*/ if (arg == NULL) return true;
+
+    struct Game_serv *g = arg;
+    int n_disconnected = 0;
+    for (int i = 0; i < g->player_count; i++) {
+        if (g->players[i].netinfo.pk_queue.closed) {
+            printf("ERRO: %d:%s disconnected.", g->players[i].id, g->players[i].name);
+            g->disconnected_players[n_disconnected++] = &g->players[i];
+        }
+    }
+
+    if (n_disconnected != 0) {
+        int res = 0;
+
+        char answ = 'a';
+
+        struct sockaddr_in d_addrs = {0};
+        socklen_t d_lens = 0;
+        
+        int stdin_fd_flags = 0;
+        fd_set_nonblocking(fileno(stdin), &stdin_fd_flags);
+
+        printf("INFO: Waiting for %d disconnected player%s (cancel game with 'c') ", n_disconnected,
+            n_disconnected > 1 ? "s" : "");
+        fflush(stdout);
+        flush_instream(fileno(stdin));
+
+        while (true) {
+            res = accept(g->listen_sock, (struct sockaddr *)&d_addrs, &d_lens);
+            if (res != -1) {
+
+                int found_id = -1;
+
+                printf("\nINFO: A player reconnected, ");
+                for (int n = 0; n < 4; n++) {
+                    if (g->disconnected_players[n] == NULL) continue;
+                    if (d_addrs.sin_addr.s_addr == g->disconnected_players[n]->netinfo.addr.sin_addr.s_addr) {
+                        found_id = g->disconnected_players[n]->id;
+                        printf("they appear to be %d:%s\n", g->players[found_id].id, g->players[found_id].name);
+                    }
+                }
+
+                if (found_id == -1) {
+                    printf("they don't appear to have previously connected\n");
+                    // TODO
+                    // printf("QUST: Do you want to let them join as anyone? [y/n]: ");
+                    // fflush(stdout);
+                    // flush_instream(fileno(stdin));
+                    // TEMP:
+                    close(res); 
+                    printf("INFO: Waiting for %d disconnected player%s (cancel game with 'c') ", n_disconnected,
+                        n_disconnected > 1 ? "s" : "");
+                    fflush(stdout);
+                    flush_instream(fileno(stdin));
+                    continue;
+                }
+
+                n_disconnected--;
+
+                thread_recv_init(&g->players[found_id].netinfo.pk_queue, res);
+                sleep(1); // this fixes the possible race condition :)
+                net_notify_clients(
+                    g, (int[]) { g->players[found_id].id }, 
+                    1, RQ_NAME, EV_WELCOME, 
+                    &(struct EV_packet_welcome) { .id = g->players[found_id].id });
+
+                if (n_disconnected <= 0) 
+                    break;
+
+                printf("INFO: Waiting for %d disconnected player%s (cancel game with 'c') ", n_disconnected,
+                    n_disconnected > 1 ? "s" : "");
+                fflush(stdout);
+                flush_instream(fileno(stdin));
+            }
+            if (errno != EAGAIN || errno != EWOULDBLOCK) {
+                fprintf(stderr, "\n");
+                perror("WARN: accept");
+                continue;
+            }
+            sleep(2);
+            answ = fgetc(stdin);
+            switch (answ) {
+            case 'c':
+                fd_unset_nonblocking(fileno(stdin), &stdin_fd_flags);
+                return false;
+            default:
+                printf("ERRO: Invalid answer, will not end game.\n");
+            case -1:
+                continue;
+            }
+        }
+        fd_unset_nonblocking(fileno(stdin), &stdin_fd_flags);
+    }
+    return true;
+}
 
 struct Packet *net_serv_forge_packet(struct Game_serv *g, struct Player *p) {
     struct Packet *packet = calloc(1, PACKET_SIZE);
@@ -65,6 +163,11 @@ int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
         n_whom = g->player_count;
     }
 
+    if (handle_disconnections(NULL) == false) {
+        serv_shutdown_game(g);
+        return 1;
+    }
+
     struct Packet *packets[4] = { 0 };
     struct Server_packet *isp = NULL;
     for (int i = 0; i < n_whom; i++) {
@@ -106,6 +209,10 @@ struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_
         struct PNode *pn = (struct PNode *)pk_q->queue.head;
         for (int i = 0; i < known_queue_size; pn = (struct PNode*)pn->node.next, i++) {
             assert(pn != NULL);
+
+            if (handle_disconnections(NULL) == false) {
+                return NULL;
+            }
 
             // this is ugly but needed since pn will always point to the list head if this thread was blocked with an empty queue waiting for a first packet.
             if (pn == (struct PNode *)&pk_q->queue.head) {
@@ -210,70 +317,3 @@ int net_get_playermove(struct Player *p, int of_round, int of_pass) {
     }
     return -1;
 }
-
-
-// int net_send_playerinfo(struct Game_serv *g, u8 player_id) {
-//     struct Player_serv *p = &g->players[player_id];
-//     struct Packet *packet = net_serv_forge_packet(g, p);
-//     struct Server_packet *sp = (struct Server_packet*)packet->data;
-//     sp->rq_kind = NO_RQ;
-//     struct EV_packet_playerinfo ev_p = {.id = player_id}; 
-//     sp->ev_kind = EV_WELCOME_CLIENT;
-//     sp->ev_size = sizeof(ev_p);
-//     memcpy(sp->ev_data, &ev_p, sp->ev_size);
-//     int sock = p->netinfo.sock_fd;
-//     int ret = net_send_packet(sock, packet);
-//     printf("INFO: Sending a EV_WELCOME_CLIENT packet to %d:%s\n", p->id, p->name);
-//     free(packet);
-//     return ret;
-// }
-
-// int net_notify_playedcard(struct Game_serv *g, int np, int *whom, struct EV_packet_playedcard args) {
-//     int errors = 0, sock = 0;
-//     int whom_all[] = {0, 1, 2, 3};
-//     if (whom == NULL) {
-//         whom = whom_all;
-//     }
-//     struct Packet *packets[4] = {0};
-//     struct Server_packet *isp = NULL;
-//     for (int i = 0; i < np; i++) {
-//         packets[i] = net_serv_forge_packet(g, &g->players[whom[i]]);
-//         isp = (struct Server_packet*)packets[i]->data;
-//         isp->rq_kind = NO_RQ;
-//         isp->ev_kind = PLAYED_CARD;
-//         isp->ev_size = sizeof(args);
-//         memcpy(isp->ev_data, &args, isp->ev_size);
-//         sock = g->players[whom[i]].netinfo.sock_fd;
-//         printf("INFO: Sending a PLAYED_CARD packet to %d:%s\n", g->players[whom[i]].id, g->players[whom[i]].name);
-//         errors += net_send_packet(sock, packets[i]);
-//     }
-//     for (int i = 0; i < np; i++) {
-//         free(packets[i]);
-//     }
-//     return errors;
-// }
-
-// int net_notify_passover(struct Game_serv *g, int np, int *whom, struct EV_packet_passover args) {
-//     int errors = 0, sock = 0;
-//     int whom_all[] = {0, 1, 2, 3};
-//     if (whom == NULL) {
-//         whom = whom_all;
-//     }
-//     struct Packet *packets[4] = {0};
-//     struct Server_packet *isp = NULL;
-//     for (int i = 0; i < np; i++) {
-//         packets[i] = net_serv_forge_packet(g, &g->players[whom[i]]);
-//         isp = (struct Server_packet*)packets[i]->data;
-//         isp->rq_kind = NO_RQ;
-//         isp->ev_kind = EV_PASS_OVER;
-//         isp->ev_size = sizeof(args);
-//         memcpy(isp->ev_data, &args, isp->ev_size);
-//         sock = g->players[whom[i]].netinfo.sock_fd;
-//         printf("INFO: Sending a EV_PASS_OVER packet to %d:%s\n", g->players[whom[i]].id, g->players[whom[i]].name);
-//         errors += net_send_packet(sock, packets[i]);
-//     }
-//     for (int i = 0; i < np; i++) {
-//         free(packets[i]);
-//     }
-//     return errors;
-// }
