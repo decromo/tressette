@@ -7,6 +7,11 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <stdbool.h>
+
+#ifndef NETWORK_H
+#   include "network.h"
+#endif
 
 typedef struct llist_node {
     struct llist_node *next;
@@ -38,9 +43,15 @@ struct Card {
 
 struct PQueue {
     int socket;
+    bool closed;
     llist queue;
     pthread_mutex_t lock;
     pthread_t pt_id;
+};
+
+struct PNode {
+    struct llist_node node;
+    struct Packet *pk;
 };
 
 struct Player_netinfo {
@@ -62,7 +73,7 @@ struct Player {
 
 int fd_unset_nonblocking(int fd, int *flags_ptr);
 int fd_set_nonblocking(int fd, int *flags_ptr);
-int flush_istream(int fd);
+int flush_instream(int fd);
 
 void llist_add(void *list, void *node);
 void llist_append(void *list, void *node);

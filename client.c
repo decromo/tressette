@@ -54,7 +54,7 @@ int client_prompt_name(char *name, int maxlen) {
     int ret;
 
     printf("What would you like to call yourself? (max %d characters) ", maxlen);
-    flush_istream(fileno(stdin));
+    flush_instream(fileno(stdin));
     getline(&buf, &bufsiz, stdin);
     // fgets(buf, maxlen+1, stdin);
     for (int i = 0; i < maxlen; i++) {
@@ -76,7 +76,7 @@ int client_prompt_move(struct Player *p, enum Suits main_suit) {
     char *buf_str = calloc(bufsiz, sizeof(char));
     char *start_ptr, *end_ptr;
     while (true) {
-        flush_istream(fileno(stdin));
+        flush_instream(fileno(stdin));
         getline(&buf_str, &bufsiz, stdin);
         buf_str[2] = '\0';
         start_ptr = buf_str;
@@ -99,12 +99,8 @@ int client_prompt_move(struct Player *p, enum Suits main_suit) {
 int client_connect(struct Player_netinfo *netinfo, char *addr, char *port) {
     int sockfd = -1, res = 0, one = 1;
     struct addrinfo hints, *ai_res, *ain;
-    char default_port[8];
     assert(addr != NULL);
-    if (port == NULL) {
-        snprintf(default_port, 5, "%d", PORT_DEFAULT);
-        port = default_port;
-    }
+    assert(port != NULL);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
@@ -113,41 +109,59 @@ int client_connect(struct Player_netinfo *netinfo, char *addr, char *port) {
     hints.ai_protocol = 0;
 
     if ((res = getaddrinfo(addr, port, &hints, &ai_res)) != 0) {
-        fprintf(stderr, "FATL: gai = %s\n", gai_strerror(res));
+        fprintf(stderr, "Could not resolve address, %s\n", gai_strerror(res));
         return -1;
     }
+    printf("Trying to connect to server at %s:%s   ", addr, port);
+    int retries = 0;
+    while (true) {
+        if (retries % 4 == 0) {
+            printf("\b\b\b   \b\b\b");
+        } else {
+            printf(".");
+        }
+        // printf("\b\b\b");
+        // for (int i = 0; i < 3; i++) {
+        //     printf("%s", i < (retries % 4) ? "." : " ");
+        // }
+        fflush(stdout);
+        for (ain = ai_res; ain != NULL; ain = ain->ai_next) {
+            if ((res = socket(ain->ai_family, ain->ai_socktype, ain->ai_protocol)) == -1) {
+                perror("WARN: socket");
+                continue;
+            };
 
-    for (ain = ai_res; ain != NULL; ain = ain->ai_next) {
-        if ((res = socket(ain->ai_family, ain->ai_socktype, ain->ai_protocol)) == -1) {
-            perror("WARN: socket");
-            continue;
-        };
+            if (setsockopt(res, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == -1) {
+                perror("ERRO: setsockopt"); }
 
-        if (setsockopt(res, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == -1) { perror("ERRO: setsockopt"); }
+            if (connect(res, ain->ai_addr, ain->ai_addrlen) == 0) {
+                // if (fcntl(res, F_SETFL, O_NONBLOCK) == -1) {
+                //     perror("ERRO: fcntl");
+                // }
+                memccpy(&netinfo->addr, ain->ai_addr, 0, sizeof(*ain->ai_addr));
+                netinfo->addr_len = ain->ai_addrlen;
+                sockfd = res;
+                break;
+            }
 
-        if (connect(res, ain->ai_addr, ain->ai_addrlen) == 0) {
-            // if (fcntl(res, F_SETFL, O_NONBLOCK) == -1) {
-            //     perror("ERRO: fcntl");
-            // }
-            memccpy(&netinfo->addr, ain->ai_addr, 0, sizeof(*ain->ai_addr));
-            netinfo->addr_len = ain->ai_addrlen;
-            sockfd = res;
+            // if (shutdown(res, SHUT_RDWR) == -1) { perror("WARN: shutdown"); }
+            close(res);
+            res = -1;
             break;
         }
 
-        if (shutdown(res, SHUT_RDWR) == -1) { perror("WARN: shutdown"); }
-        close(res);
-        res = -1;
-        break;
+        // Connection successful
+        if (ain != NULL && res != -1) {
+            printf("\nConnection successful!\n");
+            break;
+        }
+
+        // Connection unsuccessful, retry in 1 second.
+        retries++;
+        sleep(1);
     }
 
     freeaddrinfo(ai_res);
-
-    if (ain == NULL || res == -1) {
-        fprintf(stderr, "FATL: Could not connect to server...\n");
-        return -1;
-    }
-
     return sockfd;
 }
 
@@ -267,14 +281,17 @@ void client_apply_state(struct Game_client *g, struct Game_status *s, struct Pac
         llist_append(&g->player.hand, (llist_node *)cnp);
     }
 }
-void client_handle_packets(struct Game_client *g) {
+int client_handle_packets(struct Game_client *g) {
     struct Packet *packet = NULL;
     struct Server_packet *sp = NULL;
     bool game_over = false;
 
-    // bool fresh_hand = true;
-
     while (game_over == false) {
+        // check if the connection was closed
+        if (g->player.netinfo.pk_queue.closed == true) {
+            return -1;
+        }
+
         // get a packet from the recv thread and free its node
         packet = pop_packet(&g->player.netinfo.pk_queue);
 
@@ -320,6 +337,7 @@ void client_handle_packets(struct Game_client *g) {
         switch (sp->ev_kind) {
         case EV_WELCOME:
             g->player.id = ((struct EV_packet_welcome *)sp->ev_data)->id;
+            printf("Acknowledged by server, your id is %d.\n", g->player.id);
             break;
         case EV_GAME_START:
             printf("Game is starting !!\n");
@@ -353,14 +371,15 @@ void client_handle_packets(struct Game_client *g) {
 
         free(packet);
     }
+    return 0;
 }
 
 // depends on g.player_count; TODO: call end game routine??
 void client_game_over(struct Game_client *g, struct EV_packet_gameover *evp, char (*names)[4][PLAYERNAME_STRLEN+1], unsigned char (*scores)[4]) {
-    printf("** GAME OVER: %s won with %d points. **\n", *names[evp->winner_id], scores[evp->winner_id]);
+    printf("** GAME OVER: %s won with %d points. **\n", *names[evp->winner_id], *scores[evp->winner_id]);
     printf("----- final scores -----\n");
     for (int i = 0; i < g->player_count; i++) {
-        printf("| %s with %d points \t\t|\n", *names[evp->winner_id], scores[evp->winner_id]);
+        printf("| %s with %d points \t\t|\n", *names[evp->winner_id], *scores[evp->winner_id]);
     }
     printf("------------------------\n");
 }
@@ -411,9 +430,10 @@ void client_played_card(struct Game_client *g, struct EV_packet_playedcard *evp,
 
 int main(int argc, char **argv) {
     char *servaddr = "cc.dieg.one";
-    char *servport = NULL;
+    char servport[8];
+    snprintf(servport, 5, "%d", PORT_DEFAULT);
     if (argc >= 2) { servaddr = argv[1]; }
-    if (argc >= 3) { servport = argv[2]; }
+    if (argc >= 3) { strncpy(servport, argv[2], 5); }
 
     while (true) {
         int servsock = -1;
@@ -424,7 +444,13 @@ int main(int argc, char **argv) {
 
         client_setup_game(&game, servsock);
 
-        client_handle_packets(&game);
+        while (client_handle_packets(&game) == -1) {
+            // lost connection
+            if (client_try_reconnect(&game, servaddr, servport) == true)
+                continue;
+            else
+                return 1;
+        }
 
         if (client_end_game(&game) == true)
             continue;
@@ -436,13 +462,11 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-bool client_end_game(struct Game_client *game) {
-    close(game->player.netinfo.pk_queue.socket);
-
+bool client_end_game(struct Game_client *g) {
     char answ;
     while (true) {
         printf("Do you want to reconnect for another game? [y/n]: ");
-        flush_istream(fileno(stdin));
+        flush_instream(fileno(stdin));
         answ = fgetc(stdin);
         switch (answ) {
         case 'Y':
@@ -455,5 +479,32 @@ bool client_end_game(struct Game_client *game) {
             printf("Invalid answer.\n");
             continue;
         }
+    }
+}
+
+bool client_try_reconnect(struct Game_client *g, char *addr, char *port) {
+    char answ;
+    while (true) {
+        printf("Connection lost, do you want to try reconnecting? [y/n]: ");
+        flush_instream(fileno(stdin));
+        answ = fgetc(stdin);
+        switch (answ) {
+        case 'Y':
+        case 'y':
+            break;
+        case 'N':
+        case 'n':
+            return false;
+        default:
+            printf("Invalid answer.\n");
+            continue;
+        }
+
+        int servsock = client_connect(&g->player.netinfo, addr, port);
+        if (servsock == -1) { return false; }
+
+        client_setup_game(g, servsock);
+
+        return true;
     }
 }

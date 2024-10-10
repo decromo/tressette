@@ -3,7 +3,9 @@
 
 #include <stdint.h>
 #include <sys/types.h>
-#include "common.h"
+#ifndef COMMON_H
+#   include "common.h"
+#endif
 
 #define PORT_DEFAULT 3000
 #define PACKET_SIZE 192
@@ -78,11 +80,6 @@ struct Packet {
     char data[PACKET_SIZE - sizeof(enum Packet_kind)];
 } __attribute__((__packed__));
 
-struct PNode {
-    struct llist_node node;
-    struct Packet *pk;
-};
-
 struct RS_packet_name {
     u8 name_len;
     char name[16];
@@ -95,6 +92,9 @@ struct RS_packet_move {
 
 struct EV_packet_welcome {
     u8 id;
+} __attribute__((__packed__));
+struct EV_packet_unknownreconnection {
+    // TODO
 } __attribute__((__packed__));
 struct EV_packet_playedcard {
     u8 whose;
@@ -169,8 +169,8 @@ static inline pk_size_t response_sizeof(enum Response_kind k) {
 }
 
 int net_send_packet(int sock, struct Packet *packet);
-void *thread_recv_main(void *pk_q_void);
 struct Packet *net_recv_packet(int sock);
+void free_pnode_packet(void *arg);
 
 // struct Packet_reconnect_request {
 

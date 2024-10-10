@@ -25,7 +25,7 @@ struct Game_client {
 };
 
 void client_round_over(struct Game_client *g, struct EV_packet_roundover *evp, char (*names)[4][PLAYERNAME_STRLEN+1]);
-void client_handle_packets(struct Game_client *g);
+int client_handle_packets(struct Game_client *g);
 void client_apply_state(struct Game_client *g, struct Game_status *s, struct Packet_hand *hand);
 void game_organize_hand(struct llist *hand, int selector_arr[20], bool print);
 void game_print_roundpass(int round, int pass);
@@ -45,6 +45,7 @@ void client_turn_start(struct Game_client *g, struct EV_packet_turnstart *evp,
 void client_played_card(struct Game_client *g, struct EV_packet_playedcard *evp,
     char (*names)[4][PLAYERNAME_STRLEN + 1]);
 bool client_end_game(struct Game_client *game);
+bool client_try_reconnect(struct Game_client *g, char *addr, char *port);
 
 
 #endif // CLIENT_H
