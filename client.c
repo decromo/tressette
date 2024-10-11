@@ -54,9 +54,9 @@ int client_prompt_name(char *name, int maxlen) {
     int ret;
 
     printf("What would you like to call yourself? (max %d characters) ", maxlen);
-    flush_instream(fileno(stdin));
-    getline(&buf, &bufsiz, stdin);
-    // fgets(buf, maxlen+1, stdin);
+    fflush(stdout);
+    flush_instream(stdin);
+    fgets(buf, maxlen+1, stdin);
     for (int i = 0; i < maxlen; i++) {
         if (buf[i] == '\0' || buf[i] == '\n') {
             name[i] = '\0';
@@ -76,7 +76,7 @@ int client_prompt_move(struct Player *p, enum Suits main_suit) {
     char *buf_str = calloc(bufsiz, sizeof(char));
     char *start_ptr, *end_ptr;
     while (true) {
-        flush_instream(fileno(stdin));
+        flush_instream(stdin);
         getline(&buf_str, &bufsiz, stdin);
         buf_str[2] = '\0';
         start_ptr = buf_str;
@@ -256,7 +256,7 @@ void client_apply_state(struct Game_client *g, struct Game_status *s, struct Pac
     g->target_score = s->target_score;
     g->round = s->round;
     g->pass = s->pass;
-    g->pass_master = s->pass_master;
+    g->pass_master_idx = s->pass_master_idx;
     g->pass_suit = s->pass_suit;
     g->turn_idx = s->turn_idx;
     g->turn_counter = s->turn_counter;
@@ -310,30 +310,6 @@ int client_handle_packets(struct Game_client *g) {
 
         client_apply_state(g, &sp->status, &sp->hand);
 
-        switch (sp->rq_kind) {
-        case RQ_NAME_INVALID:
-        case RQ_NAME:
-            last_RS_name.name_len = client_prompt_name(last_RS_name.name, PLAYERNAME_STRLEN);
-        case RQ_NAME_AGAIN:
-            net_contact_server(g, RS_NAME, &last_RS_name);
-            break;
-
-        case RQ_MOVE_INVALID:
-            game_organize_hand(&g->player.hand, g->hand_selectors, true);
-            printf("Your last move was invalid, try again.\n");
-        case RQ_MOVE:
-            game_organize_hand(&g->player.hand, g->hand_selectors, false);
-            last_RS_move.round = g->round;
-            last_RS_move.pass = g->pass;
-            last_RS_move.card_id = g->hand_selectors[client_prompt_move(&g->player, g->pass_suit)];
-        case RQ_MOVE_AGAIN:
-            net_contact_server(g, RS_MOVE, &last_RS_move);
-            break;
-
-        case RQ_NONE:
-            break;
-        }
-
         switch (sp->ev_kind) {
         case EV_WELCOME:
             g->player.id = ((struct EV_packet_welcome *)sp->ev_data)->id;
@@ -369,6 +345,30 @@ int client_handle_packets(struct Game_client *g) {
             break;
         }
 
+        switch (sp->rq_kind) {
+        case RQ_NAME_INVALID:
+        case RQ_NAME:
+            last_RS_name.name_len = client_prompt_name(last_RS_name.name, PLAYERNAME_STRLEN);
+        case RQ_NAME_AGAIN:
+            net_contact_server(g, RS_NAME, &last_RS_name);
+            break;
+
+        case RQ_MOVE_INVALID:
+            game_organize_hand(&g->player.hand, g->hand_selectors, true);
+            printf("Your last move was invalid, try again.\n");
+        case RQ_MOVE:
+            game_organize_hand(&g->player.hand, g->hand_selectors, false);
+            last_RS_move.round = g->round;
+            last_RS_move.pass = g->pass;
+            last_RS_move.card_id = g->hand_selectors[client_prompt_move(&g->player, g->pass_suit)];
+        case RQ_MOVE_AGAIN:
+            net_contact_server(g, RS_MOVE, &last_RS_move);
+            break;
+
+        case RQ_NONE:
+            break;
+        }
+
         free(packet);
     }
     return 0;
@@ -376,10 +376,10 @@ int client_handle_packets(struct Game_client *g) {
 
 // depends on g.player_count; TODO: call end game routine??
 void client_game_over(struct Game_client *g, struct EV_packet_gameover *evp, char (*names)[4][PLAYERNAME_STRLEN+1], unsigned char (*scores)[4]) {
-    printf("** GAME OVER: %s won with %d points. **\n", *names[evp->winner_id], *scores[evp->winner_id]);
+    printf("** GAME OVER: %s won with %d points. **\n", (*names)[evp->winner_id], (*scores)[evp->winner_id]);
     printf("----- final scores -----\n");
     for (int i = 0; i < g->player_count; i++) {
-        printf("| %s with %d points \t\t|\n", *names[evp->winner_id], *scores[evp->winner_id]);
+        printf("| %s with %d points \t\t|\n", (*names)[evp->winner_id], (*scores)[evp->winner_id]);
     }
     printf("------------------------\n");
 }
@@ -387,7 +387,7 @@ void client_game_over(struct Game_client *g, struct EV_packet_gameover *evp, cha
 void client_round_over(struct Game_client *g, struct EV_packet_roundover *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
     printf("--- round %d net gains ---\n", evp->round);
     for (int i = 0; i < g->player_count; i++) {
-        printf("| %s gained %d points \t\t|\n", *names[i], evp->score_deltas[i]);
+        printf("| %s gained %d points \t\t|\n", (*names)[i], evp->score_deltas[i]);
     }
     printf("-------------------------\n");
 }
@@ -396,7 +396,7 @@ void client_pass_over(struct Game_client *g, struct EV_packet_passover *evp, cha
     if (g->player.id == evp->winner_id) {
         printf("--- You won this pass with ");
     } else {
-        printf("--- Pass goes to %s with ", *names[evp->winner_id]);
+        printf("--- Pass goes to %s with ", (*names)[evp->winner_id]);
     }
     printf("%d of %s, got %d",
         g->pass_cards[evp->winner_id]->value + 1,
@@ -412,7 +412,7 @@ void client_turn_start(struct Game_client *g, struct EV_packet_turnstart *evp, c
         // TODO: make better prompt
         printf("It's your turn\n");
     } else {
-        printf("It's %s's turn.\n", *names[evp->who]);
+        printf("It's %s's turn.\n", (*names)[evp->who]);
     }
 }
 // depends on g.turn_counter: needs to be the turn where the card was played
@@ -420,7 +420,7 @@ void client_played_card(struct Game_client *g, struct EV_packet_playedcard *evp,
     if (evp->whose == g->player.id) {
         printf("You played ");
     } else {
-        printf("%s played ", *names[evp->whose]);
+        printf("%s played ", (*names)[evp->whose]);
     }
     printf("%d of %s.\n", evp->card.val + 1, suit_to_string(evp->card.suit));
     if (g->turn_counter == 0) {
@@ -466,7 +466,7 @@ bool client_end_game(struct Game_client *g) {
     char answ;
     while (true) {
         printf("Do you want to reconnect for another game? [y/n]: ");
-        flush_instream(fileno(stdin));
+        flush_instream(stdin);
         answ = fgetc(stdin);
         switch (answ) {
         case 'Y':
@@ -486,7 +486,7 @@ bool client_try_reconnect(struct Game_client *g, char *addr, char *port) {
     char answ;
     while (true) {
         printf("Connection lost, do you want to try reconnecting? [y/n]: ");
-        flush_instream(fileno(stdin));
+        flush_instream(stdin);
         answ = fgetc(stdin);
         switch (answ) {
         case 'Y':

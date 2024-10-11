@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #ifndef NETWORK_H
 #   include "network.h"
@@ -73,7 +74,7 @@ struct Player {
 
 int fd_unset_nonblocking(int fd, int *flags_ptr);
 int fd_set_nonblocking(int fd, int *flags_ptr);
-int flush_instream(int fd);
+int flush_instream(FILE *stream);
 
 void llist_add(void *list, void *node);
 void llist_append(void *list, void *node);

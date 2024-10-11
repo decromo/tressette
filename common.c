@@ -45,18 +45,19 @@ int fd_set_nonblocking(int fd, int *flags_ptr) {
     return 0;
 }
 
-int flush_instream(int fd) {
+int flush_instream(FILE *stream) {
+    assert(stream != NULL);
+    int fd = fileno(stream);
     int res = 0;
     int flags = 0;
-    char c = 'a';
-    size_t bytes_read = 0;
+    int bytes_read = 0;
 
     if (fd_set_nonblocking(fd, &flags) == -1) {
         return -1;
     }
 
     while (bytes_read != -1)
-        bytes_read = read(fd, &c, 1);
+        bytes_read = fgetc(stream);
 
     if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
         perror("read() failed");

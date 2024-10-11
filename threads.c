@@ -18,7 +18,7 @@
 // TODO: cleanup thread, mutex, attr, and socket maybe?
 void *thread_recv_main(void *arg) {
     struct PQueue *pk_q = arg;
-    struct pollfd pollfd = { .fd = pk_q->socket + 4, .events = POLLIN, .revents = 0 };
+    struct pollfd pollfd = { .fd = pk_q->socket, .events = POLLIN, .revents = 0 };
 
     pthread_cleanup_push(thread_recv_destroy, pk_q);
 
@@ -31,14 +31,17 @@ void *thread_recv_main(void *arg) {
         if (pollfd.revents != 0) {
             if (pollfd.revents & POLLERR) {
                 // something went wrong, cleanup and exit
+                printf("\nTRAC: got POLLERR\n");
                 pthread_exit(NULL);
             }
             if (pollfd.revents & POLLNVAL) {
                 // invalid socket, cleanup and exit
+                printf("\nTRAC: got POLLNVAL\n");
                 pthread_exit(NULL);
             }
             if (pollfd.revents & POLLHUP) {
                 // another thread closed the socket, cleanup and exit
+                printf("\nTRAC: got POLLHUP\n");
                 pthread_exit(NULL);
             }
             if (pollfd.revents & POLLIN) {
@@ -59,7 +62,7 @@ void *thread_recv_main(void *arg) {
             sleep(1); continue;
         }
     }
-    pthread_cleanup_pop(thread_recv_destroy);
+    pthread_cleanup_pop(0);
 }
 
 
@@ -89,6 +92,8 @@ pthread_t thread_recv_init(struct PQueue *pk_q, int sockfd) {
 }
 
 void thread_recv_destroy(void *arg) {
+    printf("\nTRAC: destroying thread %ld\n", pthread_self());
+
     struct PQueue *pk_q = arg;
 
     pthread_mutex_lock(&pk_q->lock);

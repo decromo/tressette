@@ -53,7 +53,7 @@ struct Game_status {
     u8 round;
     u8 pass;
     struct Packet_card pass_cards[4];
-    u8 pass_master : 2;
+    u8 pass_master_idx : 2;
     u8 pass_suit : 2;
     u8 turn_idx : 2;
     u8 turn_counter : 2;

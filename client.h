@@ -14,7 +14,7 @@ struct Game_client {
     int pass;
     struct Card *pass_cards[4];
     enum Suits pass_suit;
-    int pass_master;
+    int pass_master_idx;
     int turn_idx;
     int turn_counter;
     char names[4][PLAYERNAME_STRLEN + 1];
