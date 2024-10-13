@@ -130,6 +130,7 @@ static inline pk_size_t event_sizeof(enum Event_kind k) {
     case EV_PLAYED_CARD: return sizeof(struct EV_packet_playedcard);
     case EV_NONE: return 0;
     }
+    return -1;
 }
 static inline const char *event_nameof(enum Event_kind k) {
     switch (k) {
@@ -144,6 +145,7 @@ static inline const char *event_nameof(enum Event_kind k) {
     case EV_PLAYED_CARD: return "playedcard";
     case EV_NONE: return "noevent";
     }
+    return "event_nameof-ERROR";
 }
 
 // RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID, RQ_NONE
@@ -157,6 +159,7 @@ static inline const char *request_nameof(enum Request_kind k) {
     case RQ_MOVE_INVALID: return "move_invalid";
     case RQ_NONE: return "norequest";
     }
+    return "request_nameof-ERROR";
 }
 
 // RS_NAME, RS_MOVE, RS_UPDATEME
@@ -166,6 +169,7 @@ static inline pk_size_t response_sizeof(enum Response_kind k) {
     case RS_MOVE: return sizeof(struct RS_packet_move);
     case RS_UPDATEME: return 0;
     }
+    return -1;
 }
 
 int net_send_packet(int sock, struct Packet *packet);

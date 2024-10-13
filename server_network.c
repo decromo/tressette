@@ -253,7 +253,7 @@ struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_
 
             struct Client_packet *cp = (struct Client_packet *)pn->pk->data;
             // only return the n-th (0 index) packet with the correct response
-            // FIXME: this is clunky and unflexble, try to handle it another way
+            // FIXME: this is clunky and unflexible, try to handle it another way
             if (cp->rs_kind == rs_k && n_found++ == n) {
                 return pn;
             }
@@ -276,7 +276,6 @@ int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, sock
         n = 0,
         one = 1;
     char answ = 'a';
-    int stdin_fd_flags = 0;
     struct pollfd pfds[6] = {0};
 
     // start polling just listen_sock and stdin
@@ -367,7 +366,7 @@ int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, sock
                 printf("\nINFO: A player disconnected, there %s now %d player%s waiting%s.\n", n == 1 ? "is" : "are",
                     n, n == 1 ? "" : "s", returning == true ? " (game start canceled)" : "");
                 if (n >= 2) {
-                    printf("QUST: Start the game anyways? [y/n]: ", n);
+                    printf("QUST: Start the game anyways? [y/n]: ");
                     fflush(stdout);
                     flush_instream(stdin);
                 }

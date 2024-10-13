@@ -52,8 +52,7 @@ int client_prompt_name(char *name, int maxlen) {
 }
 int client_prompt_move(struct Player *p, enum Suits main_suit) {
     int selection = -1;
-    size_t bufsiz = 8;
-    char buf_str[8];
+    char buf_str[8] = { 0 };
     char *end_ptr;
 
     printf("Which card do you want to play? ");
@@ -61,7 +60,7 @@ int client_prompt_move(struct Player *p, enum Suits main_suit) {
         fflush(stdout);
         flush_instream(stdin);
         fgets(buf_str, 8, stdin);
-        buf_str[2] = '\0';
+        buf_str[7] = '\0';
         selection = strtol(buf_str, &end_ptr, 10);
 
         if (buf_str != end_ptr 
@@ -168,7 +167,6 @@ void game_organize_hand(struct llist *hand, int selector_arr[20], bool print) {
     struct Packet_card buf[4][20];
     memset(buf, 0, 80 * sizeof(struct Packet_card));
     int sizes[4] = { 0 };
-    int suits_remaining_tot = 4;
     char suits_remaining[5] = "AAAA";
 
     enum Suits cs = -1;
@@ -186,7 +184,7 @@ void game_organize_hand(struct llist *hand, int selector_arr[20], bool print) {
 
     int i_card = 0;
     int line = 0;
-    char selector_str[16] = "";
+    char selector_str[20] = "";
     bool with_selection = (selector_arr != NULL);
 
     #define PRINT(...) \
@@ -199,7 +197,7 @@ void game_organize_hand(struct llist *hand, int selector_arr[20], bool print) {
         for (int i_suit = 0; i_suit < 4; i_suit++) {
             if (line < sizes[i_suit]) {
                 if (with_selection == true) {
-                    snprintf(selector_str, 15, "\b\b\b(%s%d) ", 
+                    snprintf(selector_str, 18, "\b\b\b(%s%d) ", 
                         (i_card < 9) ? " " : "", 
                         i_card + 1);
                     selector_arr[i_card] = buf[i_suit][line].id;
