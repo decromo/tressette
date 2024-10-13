@@ -31,6 +31,7 @@
 // int admin_idx = 0;
 
 // TODO: look into accept4()
+// FIXME: canceling game does not cancel game, it just skips to the next pass
 
 int serv_setup_game(struct Game_serv *g, int listen_sock) {
 
@@ -200,7 +201,9 @@ int main(int argc, char **argv) {
         while (is_game_over_serv(game.players, game.player_count, game.target_score) == false) {
             give_cards(game.players, game.player_count, game.deck);
 
-            serv_simulate_round(&game);
+            res = serv_simulate_round(&game);
+            if (res == -1) break;
+
             game.round++;
         }
         serv_end_game(&game);
@@ -370,7 +373,7 @@ int serv_simulate_round(struct Game_serv *g) {
 
     while (cards_remaining > 0) {
 
-        res == serv_simulate_pass(g, (cards_remaining - g->player_count == 0));
+        res = serv_simulate_pass(g, (cards_remaining - g->player_count == 0));
         if (res == -1)
             return -1; // game needs to be terminated due to disconnections
 
@@ -404,7 +407,6 @@ bool is_game_over_serv(struct Player ps[1], int n_players, int target) {
             return true;
     return false;
 }
-// TODO: forgor && kill recv threads
 void serv_end_game(struct Game_serv *g) {
     int winner_id = -1;
     int max_score = -1;
@@ -419,9 +421,11 @@ void serv_end_game(struct Game_serv *g) {
     }
 
     assert(winner_id >= 0);
-    assert(g->players[winner_id].game_score >= g->target_score);
+    if (g->players[winner_id].game_score < g->target_score) {
+        printf("FATL: Game was aborted.\n");
+    }
     net_notify_clients(g, NULL, 0, RQ_NONE, NULL,
-         EV_GAME_OVER, &(struct EV_packet_gameover){.winner_id = winner_id});
+        EV_GAME_OVER, &(struct EV_packet_gameover){ .winner_id = winner_id });
 
     for (int i = 0; i < g->player_count; i++) {
         llist_nuke(&g->players[i].hand, NULL);

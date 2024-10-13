@@ -3,9 +3,8 @@
 
 #include <stdint.h>
 #include <sys/types.h>
-#ifndef COMMON_H
-#   include "common.h"
-#endif
+
+#include "common.h"
 
 #define PORT_DEFAULT 3000
 #define PACKET_SIZE 256
@@ -137,6 +136,7 @@ static inline pk_size_t event_sizeof(enum Event_kind k) {
     case EV_PLAYED_CARD: return sizeof(struct EV_packet_playedcard);
     case EV_NONE: return 0;
     }
+    return -1;
 }
 static inline const char *event_nameof(enum Event_kind k) {
     switch (k) {
@@ -150,11 +150,12 @@ static inline const char *event_nameof(enum Event_kind k) {
     case EV_TURN_START: return "turnstart";
     case EV_PLAYED_CARD: return "playedcard";
     case EV_NONE: return "noevent";
+    default: return "event_nameof-ERROR";
     }
 }
 
 // RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID, RQ_WHOAREYOU, RQ_NONE
-static inline pk_size_t *request_sizeof(enum Request_kind k) {
+static inline pk_size_t request_sizeof(enum Request_kind k) {
     switch (k) {
     case RQ_NAME: return 0;
     case RQ_NAME_AGAIN: return 0;
@@ -164,6 +165,7 @@ static inline pk_size_t *request_sizeof(enum Request_kind k) {
     case RQ_MOVE_INVALID: return 0;
     case RQ_WHOAREYOU: return sizeof(struct RQ_packet_whoareyou);
     case RQ_NONE: return 0;
+    default: return 0;
     }
 }
 
@@ -177,6 +179,7 @@ static inline const char *request_nameof(enum Request_kind k) {
     case RQ_MOVE_INVALID: return "moveinvalid";
     case RQ_WHOAREYOU: return "whoareyou";
     case RQ_NONE: return "norequest";
+    default: return "request_nameof-ERROR";
     }
 }
 
@@ -186,8 +189,11 @@ static inline pk_size_t response_sizeof(enum Response_kind k) {
     case RS_NAME: return sizeof(struct RS_packet_name);
     case RS_MOVE: return sizeof(struct RS_packet_move);
     case RS_UPDATEME: return 0;
+    default: return -1;
     }
 }
+
+struct PQueue;
 
 int net_send_packet(int sock, struct Packet *packet);
 struct Packet *net_recv_packet(int sock);

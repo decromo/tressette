@@ -10,9 +10,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#ifndef NETWORK_H
-#   include "network.h"
-#endif
+
+#include "network.h"
 
 typedef struct llist_node {
     struct llist_node *next;

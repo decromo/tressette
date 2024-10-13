@@ -94,7 +94,7 @@ bool net_query_queue(struct PQueue *pk_q, enum Packet_kind pk_k,
     enum Request_kind rq_k, enum Event_kind ev_k, enum Response_kind rs_k) {
     
     int known_size = pk_q->queue.size;
-    struct PNode *pn = pk_q->queue.head;
+    struct PNode *pn = (struct PNode *)pk_q->queue.head;
     struct Server_packet *spk = NULL;
     struct Client_packet *cpk = NULL;
 
@@ -110,7 +110,7 @@ bool net_query_queue(struct PQueue *pk_q, enum Packet_kind pk_k,
             break;
         case CLIENT_PKT:
             cpk = (struct Client_packet *)pn->pk->data;
-            if (cpk->rs_kind == rq_k)
+            if (cpk->rs_kind == rs_k)
                 return true;    // found a matching packet
             break;
         }
