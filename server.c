@@ -99,7 +99,7 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
         p->netinfo.addr = ps_addr[i];
         p->netinfo.addr_len = ps_len[i];
         thread_recv_init(&p->netinfo.pk_queue, ps_sock[i]);
-        errors += net_notify_clients(g, (int[]) { p->id }, 1, RQ_NAME, EV_WELCOME, &(struct EV_packet_welcome) { .id = p->id });
+        errors += net_notify_clients(g, (int[]) { p->id }, 1, RQ_NAME, NULL, EV_WELCOME, &(struct EV_packet_welcome) { .id = p->id });
     }
 
     if (errors < 0) return -1;
@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
         if (res == -1)
             break;
 
-        res = net_notify_clients(&game, NULL, 0, RQ_NONE, EV_GAME_START, NULL);
+        res = net_notify_clients(&game, NULL, 0, RQ_NONE, NULL, EV_GAME_START, NULL);
         if (res == -1) return -1; // game needs to be terminated due to disconnections
 
         while (is_game_over_serv(game.players, game.player_count, game.target_score) == false) {
@@ -250,7 +250,7 @@ int serv_simulate_turn(struct Game_serv *g, struct Player *turn_player) {
     // turn start
     res = net_notify_clients(g,
         NULL, 0,
-        RQ_NONE, 
+        RQ_NONE, NULL,
         EV_TURN_START, &(struct EV_packet_turnstart) {.who = turn_player->id});
     if (res == -1) return -1; // game needs to be terminated due to disconnections
 
@@ -275,7 +275,7 @@ int serv_simulate_turn(struct Game_serv *g, struct Player *turn_player) {
 
     // let players know about the played card
     struct Packet_card pc = { .suit = turn_card->c->suit, .val = turn_card->c->value };
-    res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PLAYED_CARD,
+    res = net_notify_clients(g, NULL, 0, RQ_NONE, NULL, EV_PLAYED_CARD,
                         &(struct EV_packet_playedcard){.whose = turn_player->id, .card = pc});
     if (res == -1) return -1; // game needs to be terminated due to disconnections
 
@@ -302,7 +302,7 @@ int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
 
     printf("TRAC: Round %d, Pass %d\n", g->round + 1, g->pass + 1);
 
-    res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PASS_START, NULL);
+    res = net_notify_clients(g, NULL, 0, RQ_NONE, NULL, EV_PASS_START, NULL);
     if (res == -1) return -1;
 
     while (g->turn_counter < g->player_count) {
@@ -327,7 +327,7 @@ int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
             suit_to_string(g->pass_cards[pass_winner_id]->suit));
 
     // let players know who won
-    res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PASS_OVER,
+    res = net_notify_clients(g, NULL, 0, RQ_NONE, NULL, EV_PASS_OVER,
             &(struct EV_packet_passover){.point_thirds_won = thrown_totval, .winner_id = pass_winner_id});
     if (res == -1) return -1;
 
@@ -365,7 +365,7 @@ int serv_simulate_round(struct Game_serv *g) {
     g->pass_master_idx = g->round % g->player_count;
     g->pass = 0;
 
-    res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_ROUND_START, NULL);
+    res = net_notify_clients(g, NULL, 0, RQ_NONE, NULL, EV_ROUND_START, NULL);
     if (res == -1) return -1; // game needs to be terminated due to disconnections
 
     while (cards_remaining > 0) {
@@ -391,7 +391,7 @@ int serv_simulate_round(struct Game_serv *g) {
     {
         struct EV_packet_roundover pr = { .round = g->round };
         for (int i = 0; i < g->player_count; i++) { pr.score_deltas[i] = score_deltas[i]; };
-        res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_ROUND_OVER, &pr);
+        res = net_notify_clients(g, NULL, 0, RQ_NONE, NULL, EV_ROUND_OVER, &pr);
         if (res == -1) return -1; // game needs to be terminated due to disconnections
     }
 
@@ -420,8 +420,8 @@ void serv_end_game(struct Game_serv *g) {
 
     assert(winner_id >= 0);
     assert(g->players[winner_id].game_score >= g->target_score);
-    net_notify_clients(g, NULL, 0, RQ_NONE, EV_GAME_OVER, 
-        &(struct EV_packet_gameover){.winner_id = winner_id});
+    net_notify_clients(g, NULL, 0, RQ_NONE, NULL,
+         EV_GAME_OVER, &(struct EV_packet_gameover){.winner_id = winner_id});
 
     for (int i = 0; i < g->player_count; i++) {
         llist_nuke(&g->players[i].hand, NULL);
@@ -448,7 +448,7 @@ struct Card_node *serv_get_playermove(struct Game_serv *g, struct Player *p, int
         // request a move packet from a client
         res = net_notify_clients(g, 
                 (int[]) { g->turn_idx }, 1,
-                response_invalid ? RQ_MOVE_INVALID : RQ_MOVE, 
+                response_invalid ? RQ_MOVE_INVALID : RQ_MOVE, NULL,
                 EV_NONE, NULL);
         // check if the game has been canceled
         if (res == -1)
@@ -461,7 +461,7 @@ struct Card_node *serv_get_playermove(struct Game_serv *g, struct Player *p, int
                 // get the i-th (0-based) move packet out of the queue
                 pn = net_serv_need_response(
                     RS_MOVE, &p->netinfo.pk_queue,
-                    i, true);
+                    i);
 
                 // break if no connections have been lost
                 if (pn != NULL)
@@ -483,7 +483,7 @@ struct Card_node *serv_get_playermove(struct Game_serv *g, struct Player *p, int
                 if (resend_packet == true) {
                     res = net_notify_clients(g, 
                         (int[]) { g->turn_idx }, 1,
-                        RQ_MOVE_INVALID, 
+                        RQ_MOVE_INVALID, NULL,
                         EV_NONE, NULL);
                     if (res == -1) 
                         return NULL;
@@ -537,7 +537,7 @@ int serv_get_playername(struct Game_serv *g, struct Player *p, int maxsize) {
         // get the first name packet out of the queue
         pn = net_serv_need_response(
             RS_NAME, &p->netinfo.pk_queue,
-            0, true);
+            0);
 
         // break if no connections have been lost
         if (pn != NULL)
@@ -560,7 +560,7 @@ int serv_get_playername(struct Game_serv *g, struct Player *p, int maxsize) {
             int res = 0;
             res = net_notify_clients(g, 
                 (int[]) { g->turn_idx }, 1,
-                RQ_NAME, 
+                RQ_NAME, NULL,
                 EV_NONE, NULL);
             if (res == -1) 
                 return -1;
