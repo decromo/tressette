@@ -455,7 +455,7 @@ struct Card_node *serv_get_playermove(struct Game_serv *g, struct Player *p, int
             return NULL;
         
         // not sure I still want this for loop
-        for (int i = 0; i < LOOKFOR_MAXPACKETS; i++) {
+        for (int i = 0; i < LOOKFOR_MAXPACKETS && pn == NULL; i++) {
             
             while (true) {
                 // get the i-th (0-based) move packet out of the queue
@@ -517,6 +517,7 @@ struct Card_node *serv_get_playermove(struct Game_serv *g, struct Player *p, int
                 ret = find_valid_card( (struct Card_node *)p->hand.head, p->card_count, card_id, g->pass_suit);
                 if (ret == NULL) {
                     response_invalid = true;
+                    i--;
                     break;
                 }
             }

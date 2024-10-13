@@ -126,7 +126,7 @@ bool net_handle_disconnections(struct Game_serv *g) {
             fd_unset_nonblocking(fileno(stdin), &stdin_fd_flags);
             return false;
         default:
-            printf("\nERRO: Invalid answer (cancel game with 'c') \n");
+            printf("\nERRO: Invalid answer (cancel game with 'c') ");
         case -1:
             continue;
         }
@@ -244,7 +244,7 @@ struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_
 
             assert(pn->pk != NULL);
 
-            // only accept client_pkt's, remove the others from queue by acquiring its lock
+            // only accept client_pkt's, get the queue lock in order to remove packets of other kinds from it
             if (pn->pk->pk_kind != CLIENT_PKT) {
                 free(pn->pk);
                 llist_mtsafe(pk_q, remove, pn);
