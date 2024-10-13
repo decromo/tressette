@@ -337,29 +337,35 @@ int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, sock
         // this must be executed befor placing the new client's socket and address data inside the data structures
         for (int i = 0; i < n; i++) {
             while (pfds[i+2].revents & POLLIN) {
+
+                // reckless
+                assert(pfds[i+2].fd != -1);
+
                 int scrap_ret = 0;
                 char scrap_buf[4];
                 // NOTE: we will discard any data they might have sent us! (this is fine for now)
                 scrap_ret = recv(pfds[i+2].fd, scrap_buf, 1, 0);
-                if (scrap_ret == -1) perror("scrap recv:"); // we want to enter the next if block too
+                if (scrap_ret == -1) 
+                    perror("scrap recv:"); // we want to enter the next if block too
                 if (scrap_ret != 0) { poll(&pfds[i+2], 1, 100); continue; }
 
-                // if scrap_ret is 0, the 'i-2'th client has disconnected
+                // if scrap_ret is 0, the i-th client has disconnected
                 // remove them from pfds
                 pfds[i+2].fd = -1;
-                // overwrite their data with the last client's data
+                // overwrite their data with the data of the most recently connected client
                 pfds[i+2].fd = pfds[n+1].fd;
+                pfds[i+2].revents = pfds[n+1].revents;
                 sock[i] = sock[n-1];
                 addr[i] = addr[n-1];
                 len[i] = len[n-1];
-                // decrease n since we care about one less client now
-                n--;
                 // decrease i since we will need to verify the 'new' i-th client in the next iteration
                 i--;
+                // decrease n since we care about one less client now
+                n--;
 
                 // some I/O
-                printf("\nINFO: A player disconnected, there are now %d player%s waiting%s.\n", n,
-                    n == 1 ? "" : "s", returning == true ? " (game start canceled)" : "");
+                printf("\nINFO: A player disconnected, there %s now %d player%s waiting%s.\n", n == 1 ? "is" : "are",
+                    n, n == 1 ? "" : "s", returning == true ? " (game start canceled)" : "");
                 if (n >= 2) {
                     printf("QUST: Start the game anyways? [y/n]: ", n);
                     fflush(stdout);
@@ -370,7 +376,11 @@ int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, sock
                 disconnection_free = false;
                 returning = false;
 
-                // this routine should still work as expected even when i = n-1.
+                // we no longer need the while loop (its just for recv-ing)
+                break;
+
+                // this routine should still work as expected even when i = n-1 
+                // (in other words, when the most recently connected client is the one who got disconnected),
                 // some redundancies were made in order to ensure a coherent state even in that case
             }
         }
