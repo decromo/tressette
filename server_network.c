@@ -71,38 +71,23 @@ bool net_handle_disconnections(struct Game_serv *g) {
         if (res != -1) {
 
             int found_id = -1;
-            // int free_player_idx = -1;
-            // struct RQ_packet_whoareyou pwru = { 0 };
-            // pwru.names_count = g->disconnected_player_count;
 
             printf("\nINFO: A player reconnected, ");
-            for (int n = 0, i = 0; n < 4; n++) {
+            for (int n = 0; n < 4; n++) {
                 if (g->disconnected_players[n] == NULL) continue;
-
-                // // place the disconnected names in the rq packet
-                // memcpy(&pwru.names[i*16], g->disconnected_players[n]->name, 15);
-                // i++;
-
-                // do an address check
                 if (d_addr.sin_addr.s_addr == g->disconnected_players[n]->netinfo.addr.sin_addr.s_addr) {
                     found_id = g->disconnected_players[n]->id;
                     printf("they appear to be %d:%s\n", g->players[found_id].id, g->players[found_id].name);
-                    continue;
                 }
-
-                // we'll use this if all address checks fail (it's the last "free" slot)
-                // free_player_idx = n;
             }
 
             if (found_id == -1) {
                 printf("they don't appear to have previously connected\n");
-                
-                // // hacky! i hate this
-                // g->players[free_player_idx].netinfo.pk_queue.socket;
-                // net_notify_clients(g, (int[]) {free_player_idx}, 1,
-                //     RQ_WHOAREYOU, &pwru, EV_NONE, NULL);
-
-
+                // TODO
+                // printf("QUST: Do you want to let them join as anyone? [y/n]: ");
+                // fflush(stdout);
+                // flush_instream(stdin);
+                // TEMP:
                 close(res); 
                 printf("INFO: Waiting for %d disconnected player%s (cancel game with 'c') ",
                     g->disconnected_player_count,
@@ -118,7 +103,7 @@ bool net_handle_disconnections(struct Game_serv *g) {
             thread_recv_init(&g->players[found_id].netinfo.pk_queue, res);
             net_notify_clients(
                 g, (int[]) { g->players[found_id].id }, 
-                1, RQ_NONE, NULL, EV_WELCOME, 
+                1, RQ_NONE, EV_WELCOME, 
                 &(struct EV_packet_welcome) { .id = g->players[found_id].id });
 
             if (g->disconnected_player_count <= 0) 
@@ -185,7 +170,7 @@ struct Packet *net_serv_forge_packet(struct Game_serv *g, struct Player *p) {
 }
 
 int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
-                        enum Request_kind rq_kind, void *rq_args, enum Event_kind ev_kind, void *ev_args) {
+                        enum Request_kind rq_kind, enum Event_kind ev_kind, void *ev_args) {
     int errors = 0, sock = 0;
     int whom_all[] = { 0, 1, 2, 3 };
     if (whom == NULL) {
@@ -206,16 +191,9 @@ int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
     struct Server_packet *isp = NULL;
     for (int i = 0; i < n_whom; i++) {
         struct Player *p = &g->players[whom[i]];
-
         packets[i] = net_serv_forge_packet(g, p);
         isp = (struct Server_packet *)packets[i]->data;
-
         isp->rq_kind = rq_kind;
-        isp->rq_size = request_sizeof(rq_kind);
-        if (rq_args != NULL) {
-            memcpy(isp->rq_data, rq_args, isp->rq_size);
-        }
-
         isp->ev_kind = ev_kind;
         isp->ev_size = event_sizeof(ev_kind);
         if (ev_args != NULL) {
@@ -241,8 +219,8 @@ int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
     return errors;
 }
 
-// returns NULL if a disconnection has been detected
-struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_q, int n) {
+// TODO: timeout?
+struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_q, int n, bool wait) {
     int n_found = 0;
     
     while (n_found <= n) {
@@ -281,11 +259,11 @@ struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_
             }
         }
 
-        // // packet wasn't available when the function was called, 
-        // // return failure if we're not wating
-        // if (wait == false) {
-        //     return NULL;
-        // }
+        // packet wasn't available when the function was called, 
+        // return failure if we're not wating
+        if (wait == false) {
+            return NULL;
+        }
 
         usleep(300);
     }

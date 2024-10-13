@@ -8,8 +8,8 @@
 #include <poll.h>
 #include <stdbool.h>
 
-#include "common.h"
 #include "network.h"
+#include "common.h"
 #include "threads.h"
 
 // read more: man 7 pthreads ; man pthread_cancel

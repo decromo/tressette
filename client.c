@@ -333,8 +333,6 @@ int client_handle_packets(struct Game_client *g) {
             net_contact_server(g, RS_MOVE, &last_RS_move);
             break;
 
-        case RQ_WHOAREYOU: // TMP
-
         case RQ_NONE:
             break;
         }

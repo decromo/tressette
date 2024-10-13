@@ -7,7 +7,7 @@
 #include "common.h"
 
 #define PORT_DEFAULT 3000
-#define PACKET_SIZE 256
+#define PACKET_SIZE 192
 #define LOOKFOR_MAXPACKETS 16
 
 // u8 msg_size;    // size 255 reserved for "message is too big" error 
@@ -24,7 +24,7 @@ enum __attribute__((__packed__)) Packet_kind {
     SERVER_PKT, CLIENT_PKT
 };
 enum __attribute__((__packed__)) Request_kind {
-    RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID, RQ_WHOAREYOU, RQ_NONE
+    RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID, RQ_NONE
 };
 enum __attribute__((__packed__)) Response_kind {
     RS_NAME, RS_MOVE, RS_UPDATEME
@@ -66,8 +66,6 @@ struct Server_packet {
     enum Event_kind ev_kind;
     struct Game_status status;
     struct Packet_hand hand;
-    pk_size_t rq_size;
-    char rq_data[4 * (PLAYERNAME_STRLEN + 1)];
     pk_size_t ev_size;
     char ev_data[];
 } __attribute__((__packed__));
@@ -80,11 +78,6 @@ struct Packet {
     enum Packet_kind pk_kind;
     char data[PACKET_SIZE - sizeof(enum Packet_kind)];
 } __attribute__((__packed__));
-
-struct RQ_packet_whoareyou {
-    u8 names_count;
-    char names[4 * (PLAYERNAME_STRLEN + 1) - 1]; // we don't null terminate the last name
-};
 
 struct RS_packet_name {
     u8 name_len;
@@ -99,9 +92,9 @@ struct RS_packet_move {
 struct EV_packet_welcome {
     u8 id;
 } __attribute__((__packed__));
-// struct EV_packet_unknownreconnection {
-//     // TODO
-// } __attribute__((__packed__));
+struct EV_packet_unknownreconnection {
+    // TODO
+} __attribute__((__packed__));
 struct EV_packet_playedcard {
     u8 whose;
     struct Packet_card card;    // this struct's id field is meaningless
@@ -154,30 +147,15 @@ static inline const char *event_nameof(enum Event_kind k) {
     }
 }
 
-// RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID, RQ_WHOAREYOU, RQ_NONE
-static inline pk_size_t request_sizeof(enum Request_kind k) {
-    switch (k) {
-    case RQ_NAME: return 0;
-    case RQ_NAME_AGAIN: return 0;
-    case RQ_NAME_INVALID: return 0;
-    case RQ_MOVE: return 0;
-    case RQ_MOVE_AGAIN: return 0;
-    case RQ_MOVE_INVALID: return 0;
-    case RQ_WHOAREYOU: return sizeof(struct RQ_packet_whoareyou);
-    case RQ_NONE: return 0;
-    default: return 0;
-    }
-}
-
+// RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID, RQ_NONE
 static inline const char *request_nameof(enum Request_kind k) {
     switch (k) {
     case RQ_NAME: return "name";
-    case RQ_NAME_AGAIN: return "nameagain";
-    case RQ_NAME_INVALID: return "nameinvalid";
+    case RQ_NAME_AGAIN: return "name_again";
+    case RQ_NAME_INVALID: return "name_invalid";
     case RQ_MOVE: return "move";
     case RQ_MOVE_AGAIN: return "move_again";
-    case RQ_MOVE_INVALID: return "moveinvalid";
-    case RQ_WHOAREYOU: return "whoareyou";
+    case RQ_MOVE_INVALID: return "move_invalid";
     case RQ_NONE: return "norequest";
     default: return "request_nameof-ERROR";
     }
@@ -198,7 +176,6 @@ struct PQueue;
 int net_send_packet(int sock, struct Packet *packet);
 struct Packet *net_recv_packet(int sock);
 void free_pnode_packet(void *arg);
-bool net_query_queue(struct PQueue *pk_q, enum Packet_kind pk_k, enum Request_kind rq_k, enum Event_kind ev_k, enum Response_kind rs_k);
 
 // struct Packet_reconnect_request {
 

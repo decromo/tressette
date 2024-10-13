@@ -18,10 +18,6 @@
 #include "common.h"
 #include "network.h"
 
-// TODO: add a bool function that returns if a certain packet kind (w/ request/response/event) is present in the queue
-// i want to use it in a client subroutine which will prompt the client user for who they want to reconnect as:
-// it will be useful in order to refresh the prompt if any more reconnections or disconnections happen while choosing.
-
 struct Packet *net_recv_packet(int sock) {
     const int recv_size = 32;
     int recived = 0,
@@ -86,35 +82,4 @@ int net_send_packet(int sock, struct Packet *packet) {
 void free_pnode_packet(void *arg) {
     struct PNode *pn = arg;
     free(pn->pk);
-}
-
-// returns true if a packet of a particular type is present in the given queue.
-// note that the needed parameters depend on pk_k
-bool net_query_queue(struct PQueue *pk_q, enum Packet_kind pk_k, 
-    enum Request_kind rq_k, enum Event_kind ev_k, enum Response_kind rs_k) {
-    
-    int known_size = pk_q->queue.size;
-    struct PNode *pn = (struct PNode *)pk_q->queue.head;
-    struct Server_packet *spk = NULL;
-    struct Client_packet *cpk = NULL;
-
-    for (int i = 0; i < known_size; i++) {
-        // filter out for packet kind
-        if (pn->pk->pk_kind != pk_k) continue;
-
-        switch (pn->pk->pk_kind) {
-        case SERVER_PKT:
-            spk = (struct Server_packet *)pn->pk->data;
-            if (spk->rq_kind == rq_k && spk->ev_kind == ev_k)
-                return true;    // found a matching packet
-            break;
-        case CLIENT_PKT:
-            cpk = (struct Client_packet *)pn->pk->data;
-            if (cpk->rs_kind == rs_k)
-                return true;    // found a matching packet
-            break;
-        }
-    }
-    // didn't found that type of packet in queue
-    return false;
 }
