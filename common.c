@@ -125,7 +125,6 @@ struct Card_node *find_valid_card(struct Card_node *head, int n_cards, int card_
     cn = (struct Card_node *)head;
     for (int i = 0; i < n_cards; i++) {
         assert(cn != NULL);
-        // printf("flying on %s %s\n", suit_to_string(cn->c->suit), flying[cn->c->suit] ? "true" : "false");
         if (i != card_id) {
             cn = (struct Card_node *)cn->node.next;
             continue;
@@ -158,11 +157,6 @@ struct Card_node *find_valid_card(struct Card_node *head, int n_cards, int card_
     return NULL;
 }
 
-// void free_card_node(void *card_node) {
-//     struct Card_node *cn = card_node;
-
-// }
-
 // struct Card *find_card_in_deck(struct Card (*deck)[40], int v, enum Suits s) {
     
 // }
@@ -177,9 +171,6 @@ struct Card_node *find_valid_card(struct Card_node *head, int n_cards, int card_
 
     -- clientside
         - redo printed interface (just a bit)
-        - close game when server dies
-        - look into cleaning up the recv thread
 
     -- serverside
-        - look into cleaning up the recv thread
 */

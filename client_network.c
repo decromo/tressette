@@ -22,39 +22,6 @@
 #include "client.h"
 #include "client_network.h"
 
-// struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_q, int n, bool wait) {
-//     int n_found = 0;
-//     struct PNode *pn = (struct PNode *)pk_q->queue.head;
-//     while (n_found <= n) {  // TODO: timeout?
-//         const size_t known_queue_size = pk_q->queue.size;
-//         for (int i = 0; i < known_queue_size; pn = (struct PNode*)pn->node.next, i++) {
-//             assert(pn != NULL && pn->pk != NULL);
-
-//             // only accept client_pkt's, remove the others from queue by acquiring its lock
-//             if (pn->pk->pk_kind != CLIENT_PKT) {
-//                 free(pn->pk);
-//                 llist_mtsafe(pk_q, remove, pn);
-//                 continue;
-//             }
-
-//             struct Client_packet *cp = (struct Client_packet *)pn->pk->data;
-//             // only return the n-th (0 index) packet with the correct response
-//             // FIXME: this is clunky and unflexble, try to handle it another way
-//             if (cp->rs_kind == rs_k && n_found++ == n) {
-//                 return pn;
-//             }
-//         }
-
-//         // packet wasn't available when the function was called, 
-//         // return failure if we're not wating
-//         if (wait == false) {
-//             return NULL;
-//         }
-
-//         usleep(300);
-//     }
-// }
-
 int net_contact_server(struct Game_client *g, enum Response_kind rs_k, void *rs_args) {
     int errors = 0;
     

@@ -47,5 +47,4 @@ void client_played_card(struct Game_client *g, struct EV_packet_playedcard *evp,
 bool client_end_game(struct Game_client *game);
 bool client_try_reconnect(struct Game_client *g, char *addr, char *port);
 
-
 #endif // CLIENT_H

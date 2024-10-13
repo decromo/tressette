@@ -28,7 +28,6 @@ struct Game_serv {
     int disconnected_player_count;
 };
 
-int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, socklen_t *len);
 int serv_setup_game(struct Game_serv *g, int listen_sock);
 int serv_listen(char *port);
 int main(int argc, char **argv);

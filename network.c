@@ -71,7 +71,7 @@ int net_send_packet(int sock, struct Packet *packet) {
     while (sent != PACKET_SIZE) {
         res = send(sock, &buf[sent], PACKET_SIZE - sent, 0);
         if (res == -1) {
-            perror("send");
+            if (errno != EBADF) perror("send");
             return -1;
         }
         sent += res;

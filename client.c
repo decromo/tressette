@@ -25,25 +25,6 @@
 struct RS_packet_move last_RS_move = { 0 };
 struct RS_packet_name last_RS_name = { 0 };
 
-// void dbg_selection(struct Card_node *head, int n_cards, int *selector_arr,
-//                    int selection_id) {
-//     struct Card_node *cn = NULL;
-//     for (int i = 0; i < n_cards; i++) {
-//         printf("Selection %d -> %d: ", i + 1, selector_arr[i]);
-//         cn = head;
-//         for (int j = 0; j < n_cards; j++) {
-//             if (selector_arr[i] == j) {
-//                 printf("%d of %s:%d\n", cn->c->value + 1, suit_to_string(cn->c->suit),
-//                        cn->c->suit);
-//                 if (i == selection_id)
-//                     printf("^^^\t this is what you played.\n");
-//                 break;
-//             }
-//             cn = (struct Card_node *)cn->node.next;
-//         }
-//     }
-// }
-
 int sort_card_packets(const void *c1, const void *c2) {
     return ((struct Packet_card *)c1)->val - ((struct Packet_card *)c2)->val;
 }
@@ -70,29 +51,27 @@ int client_prompt_name(char *name, int maxlen) {
     return ret;
 }
 int client_prompt_move(struct Player *p, enum Suits main_suit) {
-    printf("Which card do you want to play? ");
     int selection = -1;
     size_t bufsiz = 8;
-    char *buf_str = calloc(bufsiz, sizeof(char));
-    char *start_ptr, *end_ptr;
-    while (true) {
-        flush_instream(stdin);
-        getline(&buf_str, &bufsiz, stdin);
-        buf_str[2] = '\0';
-        start_ptr = buf_str;
-        do {
-            selection = strtol(start_ptr, &end_ptr, 10);
-        } while (end_ptr == start_ptr++);
+    char buf_str[8];
+    char *end_ptr;
 
-        if (selection > 0 && selection <= p->card_count) { break; }
+    printf("Which card do you want to play? ");
+    while (true) {
+        fflush(stdout);
+        flush_instream(stdin);
+        fgets(buf_str, 8, stdin);
+        buf_str[2] = '\0';
+        selection = strtol(buf_str, &end_ptr, 10);
+
+        if (buf_str != end_ptr 
+            && selection > 0 
+            && selection <= p->card_count) { break; }
 
         printf("\nInvalid input, retry: ");
-        fflush(stdout);
         continue;
     }
-    free(buf_str);
 
-    // assert(selection >= 0 && selection < p->card_count);
     return selection - 1;
 }
 
@@ -174,15 +153,6 @@ void client_setup_game(struct Game_client *g, int servsock) {
     llist_init(&g->player.hand);
 
     thread_recv_init(&g->player.netinfo.pk_queue, servsock);
-    // FIXME
-    // printf("Waiting for acknowledgement...");
-    // fflush(stdout);
-    // net_get_playerinfo(game);
-    // printf(" acknowledged, your id is %d.\nWaiting for the game to start...",
-    //        game->my_id);
-    // fflush(stdout);
-    // net_get_gameinfo(game);
-    // printf(" game is starting!\n");
 }
 
 void game_print_roundpass(int round, int pass) {
@@ -508,3 +478,22 @@ bool client_try_reconnect(struct Game_client *g, char *addr, char *port) {
         return true;
     }
 }
+
+// void dbg_selection(struct Card_node *head, int n_cards, int *selector_arr,
+//                    int selection_id) {
+//     struct Card_node *cn = NULL;
+//     for (int i = 0; i < n_cards; i++) {
+//         printf("Selection %d -> %d: ", i + 1, selector_arr[i]);
+//         cn = head;
+//         for (int j = 0; j < n_cards; j++) {
+//             if (selector_arr[i] == j) {
+//                 printf("%d of %s:%d\n", cn->c->value + 1, suit_to_string(cn->c->suit),
+//                        cn->c->suit);
+//                 if (i == selection_id)
+//                     printf("^^^\t this is what you played.\n");
+//                 break;
+//             }
+//             cn = (struct Card_node *)cn->node.next;
+//         }
+//     }
+// }

@@ -31,70 +31,7 @@
 // int admin_idx = 0;
 
 // TODO: look into accept4()
-int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, socklen_t *len) {
-    int res = 0,
-        n = 0,
-        one = 1;
-    char answ = 'a';
-    int stdin_fd_flags = 0;
-    // int i_dots = 0;
-    // char str_dots[] = "...";
-    printf("TRAC: Waiting for players...\n");
-    fd_set_nonblocking(fileno(stdin), &stdin_fd_flags);
-    while (n < 4) {
-        res = accept(listen_sock, (struct sockaddr *)&addr[n], &len[n]);
-        if (res != -1) {
-            printf("\nQUST: A new player connected, ");
-            fflush(stdout);
-            sock[n] = res;
-            n++;
 
-            if (setsockopt(res, SOL_SOCKET, SO_REUSEADDR,
-                &one, sizeof one) == -1) {
-                perror("ERRO: player setsockopt");
-            }
-            // if (fcntl(res, F_SETFL, O_NONBLOCK) == -1) {
-            //     perror("ERRO: fcntl");
-            // }
-
-            if (n < 2) {
-                printf("at least one more is needed to start.\n");
-                continue;
-            } else {
-                printf("start a game with %d players? [y/n]: ", n);
-                fflush(stdout);
-                flush_instream(stdin);
-            }
-        }
-        if (errno != EAGAIN || errno != EWOULDBLOCK) {
-            fprintf(stderr, "\n");
-            perror("WARN: accept");
-            continue;
-        }
-        sleep(1);
-        if (n >= 2) {
-            answ = fgetc(stdin);
-            switch (answ) {
-            case 'Y':
-            case 'y':
-                fd_unset_nonblocking(fileno(stdin), &stdin_fd_flags);
-                return n;
-            default:
-                printf("ERRO: Invalid answer.\n");
-            case 'N':
-            case 'n':
-                printf("QUST: Start a game with %d players? [y/n]: ", n);
-                fflush(stdout);
-                flush_instream(stdin);
-            case -1:
-                continue;
-            }
-        }
-    }
-    printf("\nINFO: Starting a game with 4 players.\n");
-    fd_set_nonblocking(fileno(stdin), &stdin_fd_flags);
-    return 4;
-}
 int serv_setup_game(struct Game_serv *g, int listen_sock) {
 
     int errors = 0;
@@ -102,6 +39,9 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
     int ps_sock[4] = { 0 };
     struct sockaddr_in ps_addr[4] = { 0 };
     socklen_t ps_len[4] = { 0 };
+
+    // setup disconnection checker
+    net_detect_disconnections(g);
 
     n_players = serv_wait_players(listen_sock, ps_sock, ps_addr, ps_len);
     g->listen_sock = listen_sock;
@@ -149,9 +89,6 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
     // setup virgin deck
     memset(&g->deck, 0, 40 * sizeof(struct Card));
     initialize_deck(g->deck);
-
-    // setup disconnection checker
-    net_detect_disconnections(g);
 
     // setup player structs, start the relative recv threads and get their names
     for (int i = 0; i < n_players; i++) {

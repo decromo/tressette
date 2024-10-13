@@ -87,5 +87,4 @@ void initialize_deck(struct Card *cs);
 int calculate_pass_value(struct Card **thrown, int n_thrown);
 struct Card_node *find_valid_card(struct Card_node *head, int n_cards, int card_id, enum Suits pass_suit);
 
-
 #endif // COMMON_H

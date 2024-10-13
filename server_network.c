@@ -270,3 +270,161 @@ struct PNode *net_serv_need_response(enum Response_kind rs_k, struct PQueue *pk_
 
     return NULL;
 }
+
+int serv_wait_players(int listen_sock, int *sock, struct sockaddr_in *addr, socklen_t *len) {
+    int res = 0,
+        n = 0,
+        one = 1;
+    char answ = 'a';
+    int stdin_fd_flags = 0;
+    struct pollfd pfds[6] = {0};
+
+    // start polling just listen_sock and stdin
+    pfds[0].fd = listen_sock;
+    pfds[0].events = POLLIN;
+    pfds[1].fd = fileno(stdin);
+    pfds[1].events = POLLIN;
+    for (int i = 2; i < 6; i++) {
+        pfds[i].events = POLLIN;
+        pfds[i].fd = -1;    
+    }
+    // the rest of the pfds are for checking the incoming player's connection status
+
+    int newsock = -1;
+    struct sockaddr_in newaddr = {0};
+    socklen_t newlen = 0;
+
+    // int i_dots = 0;
+    // char str_dots[] = "...";
+    // fd_set_nonblocking(fileno(stdin), &stdin_fd_flags); // should no longer be needed, we have poll
+    printf("TRAC: Waiting for players...\n");
+    bool returning = false;
+    bool disconnection_free = true;
+    while (true) {
+        // innocent until proven guilty...
+        disconnection_free = true;
+
+        // FIXME: too hacky...
+        if (returning == false && poll(pfds, n + 2, -1) == -1) {
+            perror("poll");
+            sleep(1);
+            continue;
+        }
+        // if there is a connecting client, accept them and store their data in temporary variables
+        if (pfds[0].revents & POLLIN && n < 4 && returning == false) {
+            res = accept(listen_sock, (struct sockaddr *)&newaddr, &newlen);
+            if (res == -1) {
+                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                    fprintf(stderr, "\n");
+                    perror("WARN: accept");
+                }
+                sleep(1);
+                continue;
+            }
+            newsock = res;
+            
+            res = setsockopt(res, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+            if (res == -1) {
+                perror("ERRO: player setsockopt");
+            }
+            // res = fcntl(res, F_SETFL, O_NONBLOCK);
+            // if (res == -1) {
+            //     perror("ERRO: fcntl");
+            // }
+        }
+
+        // fancy subroutine that removes the data of any client that might have disconnected in this phase
+        // this must be executed befor placing the new client's socket and address data inside the data structures
+        for (int i = 0; i < n; i++) {
+            while (pfds[i+2].revents & POLLIN) {
+                int scrap_ret = 0;
+                char scrap_buf[4];
+                // NOTE: we will discard any data they might have sent us! (this is fine for now)
+                scrap_ret = recv(pfds[i+2].fd, scrap_buf, 1, 0);
+                if (scrap_ret == -1) perror("scrap recv:"); // we want to enter the next if block too
+                if (scrap_ret != 0) { poll(&pfds[i+2], 1, 100); continue; }
+
+                // if scrap_ret is 0, the 'i-2'th client has disconnected
+                // remove them from pfds
+                pfds[i+2].fd = -1;
+                // overwrite their data with the last client's data
+                pfds[i+2].fd = pfds[n+1].fd;
+                sock[i] = sock[n-1];
+                addr[i] = addr[n-1];
+                len[i] = len[n-1];
+                // decrease n since we care about one less client now
+                n--;
+                // decrease i since we will need to verify the 'new' i-th client in the next iteration
+                i--;
+
+                // some I/O
+                printf("\nINFO: A player disconnected, there are now %d player%s waiting%s.\n", n,
+                    n == 1 ? "" : "s", returning == true ? " (game start canceled)" : "");
+                if (n >= 2) {
+                    printf("QUST: Start the game anyways? [y/n]: ", n);
+                    fflush(stdout);
+                    flush_instream(stdin);
+                }
+
+                // reset exit flags (we shan't return just after a disconnection)
+                disconnection_free = false;
+                returning = false;
+
+                // this routine should still work as expected even when i = n-1.
+                // some redundancies were made in order to ensure a coherent state even in that case
+            }
+        }
+
+        // return if we have stable clients and we've either reached the max of 4 or have gotten confirmation from stdin
+        if (disconnection_free && returning) return n;
+
+        // now we can add the new client
+        if (newsock != -1) {
+            pfds[n+2].fd = newsock;
+            sock[n] = newsock;
+            addr[n] = newaddr;
+            len[n] = newlen;
+            
+            n++;
+
+            // ensure that we enter this block only once per client
+            newsock = -1; 
+
+            printf("\n%s: A new player connected, ", n < 2 ? "INFO" : "QUST");
+            if (n < 2) {
+                printf("at least one more is needed to start.\n");
+            } else {
+                printf("start a game with %d players? [y/n]: ", n);
+                fflush(stdout);
+                flush_instream(stdin);
+            }
+        }
+
+        sleep(1);
+
+        // read stdin if there is something there and a question has been made (when n >= 2)
+        if (pfds[1].revents & POLLIN && n >= 2) {
+            answ = fgetc(stdin);
+            switch (answ) {
+            case 'Y':
+            case 'y': 
+                // should no longer be needed, we have poll
+                // fd_unset_nonblocking(fileno(stdin), &stdin_fd_flags); 
+                returning = true;
+                break;
+            default:
+                printf("ERRO: Invalid answer.\n");
+            case 'N':
+            case 'n':
+                printf("QUST: Start a game with %d players? [y/n]: ", n);
+                fflush(stdout);
+                flush_instream(stdin);
+            case -1:
+                continue;
+            }
+        }
+    }
+    printf("\nINFO: Starting a game with 4 players.\n");
+    // fd_set_nonblocking(fileno(stdin), &stdin_fd_flags); // should no longer be needed, we have poll
+    return 4;
+}
