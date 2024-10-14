@@ -1,0 +1,12 @@
+diff -Naur a/src/Makefile b/src/Makefile
+--- a/src/Makefile	1970-01-01 01:00:01.000000000 +0100
++++ b/src/Makefile	2024-10-14 16:23:04.500280517 +0200
+@@ -728,7 +728,7 @@
+ RAYLIB_H_INSTALL_PATH ?= $(DESTDIR)/include
+ 
+ install :
+-ifeq ($(ROOT),root)
++ifeq (true, true)
+     ifeq ($(PLATFORM_OS),LINUX)
+         # Attention! You are root, writing files to $(RAYLIB_INSTALL_PATH)
+         # and $(RAYLIB_H_INSTALL_PATH). Consult this Makefile for more information.
