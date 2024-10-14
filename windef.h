@@ -1,6 +1,8 @@
 #ifndef WINDEF_H
 #define WINDEF_H
 
+
+#ifdef __MINGW32__
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
@@ -70,5 +72,7 @@ static inline ssize_t getdelim(char **buf, size_t *bufsiz, int delimiter, FILE *
 }
 #define getline(buf, bufsiz, fp) \
     getdelim(buf, bufsiz, '\n', fp);
+
+#endif // __MINGW_32__
 
 #endif // WINDEF_H

@@ -1,98 +1,43 @@
 #define _GNU_SOURCE
+#include <assert.h>
+#include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <string.h>
-#include <assert.h>
+#include <unistd.h>
 
 #ifdef __MINGW32__
-    #include "windef.h"
+#   include "windef.h"
 #else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <netdb.h>
-#endif // __MINGW32__
+#   include <sys/socket.h>
+#   include <netinet/in.h>
+#   include <arpa/inet.h>
+#   include <netdb.h>
+#endif  // __MINGW32__
 
-#include "common.h"
 #include "client.h"
+#include "client_network.h"
+#include "common.h"
 #include "network.h"
-int admin_idx = 0;
+#include "threads.h"
 
-void dbg_selection(struct Card_node *head, int n_cards, int *selector_arr, int selection_id) {
-    struct Card_node *cn = NULL;
-    for (int i = 0; i < n_cards; i++) {
-        printf("Selection %d -> %d: ", i+1, selector_arr[i]);
-        cn = head;
-        for (int j = 0; j < n_cards; j++) {
-            if (selector_arr[i] == j) {
-                printf("%d of %s:%d\n", cn->c->value+1, suit_to_string(cn->c->suit), cn->c->suit);
-                if (i == selection_id) printf("^^^\t this is what you played.\n");
-                break;
-            }
-            cn = (struct Card_node*)cn->node.next;
-        }
-    }
-}
-                
-
-// void simulate_round(struct Player *players, int n_players, int n_round) {
-//     struct Card **thrown = calloc(n_players, sizeof(struct Card*));
-//     assert(thrown != NULL);
-//     struct Card_node *cn;
-//     int cards_remaining = (40 / n_players) * n_players;
-//     int starting_idx = n_round % n_players;
-//     int i = 0;
-//     while (cards_remaining > 0) {
-//         enum Suits main_suit = -1;
-//         int winning_idx, pass_score, curr_player_idx;
-//         int extra_point = 3 * (cards_remaining == n_players); // last pass is worth 1 more full point
-//         memset(thrown, 0, n_players * sizeof(struct Card*));
-//         printf("---------------\n--- Round %d ---\n---------------\n", ++i);
-//         for (int i = 0; i < n_players; i++) {
-//             curr_player_idx = (starting_idx + i) % n_players;
-//             while (true) {
-//                 cn = take_player_card(&players[curr_player_idx], main_suit);
-//                 if (cn != NULL)  {
-//                     if (i == 0) { main_suit = cn->c->suit; };
-//                     break;
-//                 }
-//             };
-//             thrown[curr_player_idx] = cn->c;
-//             llist_remove(cn);
-//         }
-//         winning_idx = select_pass_winner(thrown, n_players, starting_idx);
-//         pass_score = calculate_pass_score(thrown, n_players) + extra_point; 
-//         players[winning_idx].round_score_thirds += pass_score;
-//         printf("--- Player %d won with %d of %s, got %d", winning_idx+1, thrown[winning_idx]->value, suit_to_string(thrown[winning_idx]->suit), pass_score / 3);
-//         if (pass_score % 3) printf(".%d", (pass_score % 3) * 33);
-//         printf(" points ---\n");
-//         starting_idx = winning_idx;
-//         cards_remaining -= n_players;
-//     }
-//     // round over
-//     for(int i = 0; i < n_players; i++) {
-//         players[i].game_score = (int) (players[i].round_score_thirds / 3);
-//     }
-//     free(thrown);
-// }
+struct RS_packet_move last_RS_move = { 0 };
+struct RS_packet_name last_RS_name = { 0 };
 
 int sort_card_packets(const void *c1, const void *c2) {
-    return ((struct Packet_card*) c1)->val - ((struct Packet_card*) c2)->val;
+    return ((struct Packet_card *)c1)->val - ((struct Packet_card *)c2)->val;
 }
 
 int client_prompt_name(char *name, int maxlen) {
-    size_t bufsiz = maxlen+2;
+    size_t bufsiz = maxlen + 2;
     char *buf = calloc(bufsiz, sizeof(char));
-    int ret; 
+    int ret;
 
-    
     printf("What would you like to call yourself? (max %d characters) ", maxlen);
-    flush_istream(fileno(stdin));
-    getline(&buf, &bufsiz, stdin);
-    // fgets(buf, maxlen+1, stdin);
+    fflush(stdout);
+    flush_instream(stdin);
+    fgets(buf, maxlen+1, stdin);
     for (int i = 0; i < maxlen; i++) {
         if (buf[i] == '\0' || buf[i] == '\n') {
             name[i] = '\0';
@@ -105,265 +50,35 @@ int client_prompt_name(char *name, int maxlen) {
     free(buf);
     return ret;
 }
-int client_prompt_move(struct Player_client *p, enum Suits main_suit) {
-    printf("Which card do you want to play? ");
+int client_prompt_move(struct Player *p, enum Suits main_suit) {
     int selection = -1;
-    size_t bufsiz = 8;
-    char *buf_str = calloc(bufsiz, sizeof(char));
-    char *start_ptr, *end_ptr;
-    while (true) {
-        flush_istream(fileno(stdin));
-        getline(&buf_str, &bufsiz, stdin);
-        buf_str[2] = '\0';
-        start_ptr = buf_str;
-        do {
-            selection = strtol(start_ptr, &end_ptr, 10);
-        } while (end_ptr == start_ptr++);
+    char buf_str[8] = { 0 };
+    char *end_ptr;
 
-        if (selection > 0 && selection <= p->card_count) {
-            break;
-        }
+    printf("Which card do you want to play? ");
+    while (true) {
+        fflush(stdout);
+        flush_instream(stdin);
+        fgets(buf_str, 8, stdin);
+        buf_str[7] = '\0';
+        selection = strtol(buf_str, &end_ptr, 10);
+
+        if (buf_str != end_ptr 
+            && selection > 0 
+            && selection <= p->card_count) { break; }
 
         printf("\nInvalid input, retry: ");
-        fflush(stdout);
         continue;
     }
-    free(buf_str);
 
-    // assert(selection >= 0 && selection < p->card_count);
     return selection - 1;
 }
 
-int net_send_playername(struct Game_client *game, char *name, int name_len) { // ret: 0 success, -1 error
-    struct Packet *packet = calloc(1, PACKET_SIZE);
-    assert(packet != NULL);
-
-    packet->kind = NAME;
-    packet->size = sizeof (struct Packet_name);
-    struct Packet_name *pnm = (struct Packet_name*)packet->data;
-    pnm->size = name_len + 1;
-    strncpy(pnm->name, name, name_len);
-
-    int ret = net_send_packet(game->socket, packet);
-    free(packet);
-    return ret;
-}
-int net_send_playermove(struct Game_client *game, int card_id) { // ret: 0 success, -1 error
-    struct Packet *packet = calloc(1, PACKET_SIZE);
-    assert(packet != NULL);
-
-    packet->kind = MOVE;
-    packet->size = sizeof (struct Packet_move);
-    struct Packet_move *pmv = (struct Packet_move*)packet->data;
-    pmv->round = game->round;
-    pmv->pass = game->pass;
-    pmv->card_id = card_id;
-
-    int ret = net_send_packet(game->socket, packet);
-    free(packet);
-    return ret;
-}
-
-void net_get_playerinfo(struct Game_client *game) {
-    struct PNode *pn = net_need_packetkind(PLAYERINFO, &game->queue, 0, true, game->socket);
-    assert(pn != NULL);
-
-    struct Packet_playerinfo *ppi = (struct Packet_playerinfo*) pn->pk->data;
-    int maxlen = ( ppi->name.size - 1 < PLAYERNAME_STRLEN ) ? ppi->name.size : PLAYERNAME_STRLEN;
-    game->my_id = ppi->id;
-    strncpy(game->players[game->my_id].name, ppi->name.name, maxlen);
-    
-    free(pn->pk);
-    llist_remove(&game->queue, pn);
-    return;
-}
-void net_get_gameinfo(struct Game_client *game) {
-    struct PNode *pn = net_need_packetkind(GAMEINFO, &game->queue, 0, true, game->socket);
-    assert(pn != NULL);
-
-    struct Packet_gameinfo *pgi = (struct Packet_gameinfo*) pn->pk->data;
-    game->player_count = pgi->player_count;
-    game->team_game = pgi->team_game;
-    game->target_score = pgi->target_score;
-    game->round = pgi->round;
-    game->pass = 0; // FIXME: is this a good place to set this?
-    int maxlen;
-    struct Player_client *cp;
-    for (int i = 0; i < pgi->player_count; i++) {
-        cp = &game->players[i];
-        cp->id = pgi->players[i].id;
-        maxlen = (pgi->players[i].name.size - 1 < PLAYERNAME_STRLEN)
-                    ? pgi->players[i].name.size - 1
-                    : PLAYERNAME_STRLEN;
-        strncpy(cp->name, pgi->players[i].name.name, maxlen);
-        cp->card_count = 40 / pgi->player_count;
-        cp->game_score = 0;
-        cp->round_score_thirds = 0;
-        cp->hand.size = 0;
-        cp->hand.head = cp->hand.head = (llist_node*)&cp->hand;
-    }
-
-    free(pn->pk);
-    llist_remove(&game->queue, pn);
-    return;
-}
-int net_get_hand(struct Game_client *game) {
-    struct PNode *pn;
-    struct Packet_hand *phd;
-    struct Player_client *p = &game->players[game->my_id];
-    int i = 0;
-    int deltaround;
-
-    for (int i = 0; i < LOOKFOR_MAXPACKETS; i++) {
-        pn = net_need_packetkind(HAND, &game->queue, 0, true, game->socket);
-        assert(pn != NULL);
-        phd = (struct Packet_hand*) pn->pk->data;
-        deltaround = phd->round - game->round;
-        if (deltaround < 0) {
-            free(pn->pk);
-            llist_remove(&game->queue, pn);
-            i--;
-            continue;
-        }
-        if (deltaround == 0) {
-            p->card_count = phd->n_cards;
-            llist_nuke(&p->hand, NULL);
-
-            struct Card_node *cn;
-            struct Packet_card incoming_card;
-            enum Suits ic_suit;
-            int ic_val;
-            for (int i = 0; i < p->card_count; i++) {
-                cn = calloc(1, sizeof(struct Card_node));
-                assert(cn != NULL);
-                assert(phd->cards[i].id == i); // TEMP
-                ic_suit = phd->cards[i].suit;
-                ic_val = phd->cards[i].val;
-                cn->c = &game->deck[ic_suit * 10 + ic_val];
-                llist_append(&p->hand, (llist_node*)cn);
-            }
-            free(pn->pk);
-            llist_remove(&game->queue, pn);
-            return 0;
-        }
-    }
-    return -1;
-}
-struct Card *net_get_moveresult(struct Game_client *game) { // deck card pointer success, NULL could not find packet
-    struct PNode *pn;
-    struct Packet_moveresult *pmr;
-    int i = 0;
-    int deltaround, deltapass;
-    int retsuit, retval;
-
-    for (int i = 0; i < LOOKFOR_MAXPACKETS; i++) {
-        pn = net_need_packetkind(MOVERESULT, &game->queue, i, true, game->socket);
-        assert(pn != NULL);
-        pmr = (struct Packet_moveresult*) pn->pk->data;
-        deltaround = pmr->round - game->round;
-        deltapass = pmr->pass - game->pass;
-        if (deltaround < 0 || (deltaround == 0 && deltapass < 0)) {
-            free(pn->pk);
-            llist_remove(&game->queue, pn);
-            i--;
-            continue;
-        }
-        if ((deltaround == 0 && deltapass == 0) /*&& (pmr->player_id == game->turn_idx)*/) {
-            retsuit = pmr->card.suit;
-            retval = pmr->card.val;
-            // game->players[pmr->player_id].card_count--;
-            free(pn->pk);
-            llist_remove(&game->queue, pn);
-            return &game->deck[retsuit * 10 + retval];
-        }
-    }
-    return NULL;
-}
-int net_get_outcome(struct Game_client *game) { // ret: winner_id success; -1 could not find packet
-    struct PNode *pn;
-    struct Packet_outcome *poc;
-    int i = 0;
-    int deltaround, deltapass;
-    int winner_id = -1;
-
-    for (int i = 0; i < LOOKFOR_MAXPACKETS; i++) {
-        pn = net_need_packetkind(OUTCOME, &game->queue, i, true, game->socket);
-        assert(pn != NULL);
-        poc = (struct Packet_outcome*) pn->pk->data;
-        deltaround = poc->round - game->round;
-        deltapass = poc->pass - game->pass;
-        if (deltaround < 0 || (deltaround == 0 && deltapass < 0)) {
-            free(pn->pk);
-            llist_remove(&game->queue, pn);
-            i--;
-            continue;
-        }
-        if ((deltaround == 0) && (deltapass == 0)) {
-            for (int i = 0; i < poc->n_scores; i++) {
-                game->players[i].round_score_thirds = poc->scores[i];
-            }
-            winner_id = poc->winner_id;
-            free(pn->pk);
-            llist_remove(&game->queue, pn);
-            return winner_id;
-        }
-    }
-    return -1;
-}
-int net_get_leaderboard(struct Game_client *game) { // ret: 0 success; -1 couldnt find packet
-    struct PNode *pn;
-    struct Packet_leaderboard *plb;
-    int i = 0;
-    int deltaround;
-    int winner_id = -1;
-
-    for (int i = 0; i < LOOKFOR_MAXPACKETS; i++) {
-        pn = net_need_packetkind(LEADERBOARD, &game->queue, i, true, game->socket);
-        assert(pn != NULL);
-        plb = (struct Packet_leaderboard*) pn->pk->data;
-        deltaround = plb->round - game->round;
-        if (deltaround < 0 ) {
-            free(pn->pk);
-            llist_remove(&game->queue, pn);
-            i--;
-            continue;
-        }
-        if (deltaround == 0) {
-            for (int i = 0; i < plb->n_players; i++) {
-                game->players[i].game_score = plb->scores[i];
-            }
-            free(pn->pk);
-            llist_remove(&game->queue, pn);
-            return 0;
-        }
-    }
-    return -1;
-}
-int net_get_coronation(struct Game_client *game) { // ret: winner_id
-    struct PNode *pn;
-    struct Packet_coronation *pcn;
-    int winner_id = -1;
-
-    pn = net_need_packetkind(CORONATION, &game->queue, 0, true, game->socket);
-    assert(pn != NULL);
-    pcn = (struct Packet_coronation*) pn->pk->data;
-
-    winner_id = pcn->winner_id;
-
-    free(pn->pk);
-    llist_remove(&game->queue, pn);
-    return winner_id;
-}
-
-int client_connect(char *addr, char *port) {
+int client_connect(struct Player_netinfo *netinfo, char *addr, char *port) {
     int sockfd = -1, res = 0, one = 1;
     struct addrinfo hints, *ai_res, *ain;
-    char default_port[8];
     assert(addr != NULL);
-    if (port == NULL) {
-        snprintf(default_port, 5, "%d", PORT_DEFAULT);
-        port = default_port;
-    }
+    assert(port != NULL);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
@@ -372,63 +87,71 @@ int client_connect(char *addr, char *port) {
     hints.ai_protocol = 0;
 
     if ((res = getaddrinfo(addr, port, &hints, &ai_res)) != 0) {
-        fprintf(stderr, "FATL: gai = %s\n", gai_strerror(res));
+        fprintf(stderr, "Could not resolve address, %s\n", gai_strerror(res));
         return -1;
     }
-    
-    for (ain = ai_res; ain != NULL; ain = ain->ai_next) {
-        if ((res = socket(ain->ai_family, ain->ai_socktype, ain->ai_protocol)) == -1) {
-            perror("WARN: socket");
-            continue;
-        };
-
-        if (setsockopt(res, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == -1) {
-            perror("ERRO: setsockopt");
+    printf("Trying to connect to server at %s:%s   ", addr, port);
+    int retries = 0;
+    while (true) {
+        if (retries % 4 == 0) {
+            printf("\b\b\b   \b\b\b");
+        } else {
+            printf(".");
         }
-        
-        if (connect(res, ain->ai_addr, ain->ai_addrlen) == 0) {
-            // if (fcntl(res, F_SETFL, O_NONBLOCK) == -1) {
-            //     perror("ERRO: fcntl");
-            // }
-            sockfd = res;
+        // printf("\b\b\b");
+        // for (int i = 0; i < 3; i++) {
+        //     printf("%s", i < (retries % 4) ? "." : " ");
+        // }
+        fflush(stdout);
+        for (ain = ai_res; ain != NULL; ain = ain->ai_next) {
+            if ((res = socket(ain->ai_family, ain->ai_socktype, ain->ai_protocol)) == -1) {
+                perror("WARN: socket");
+                continue;
+            };
+
+            if (setsockopt(res, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == -1) {
+                perror("ERRO: setsockopt"); }
+
+            if (connect(res, ain->ai_addr, ain->ai_addrlen) == 0) {
+                // if (fcntl(res, F_SETFL, O_NONBLOCK) == -1) {
+                //     perror("ERRO: fcntl");
+                // }
+                memccpy(&netinfo->addr, ain->ai_addr, 0, sizeof(*ain->ai_addr));
+                netinfo->addr_len = ain->ai_addrlen;
+                sockfd = res;
+                break;
+            }
+
+            // if (shutdown(res, SHUT_RDWR) == -1) { perror("WARN: shutdown"); }
+            close(res);
+            res = -1;
             break;
         }
 
-        if (shutdown(res, SHUT_RDWR) == -1) {
-            perror("WARN: shutdown");
+        // Connection successful
+        if (ain != NULL && res != -1) {
+            printf("\nConnection successful!\n");
+            break;
         }
-        close(res);
-        res = -1;
-        break;
+
+        // Connection unsuccessful, retry in 1 second.
+        retries++;
+        sleep(1);
     }
 
     freeaddrinfo(ai_res);
-
-    if (ain == NULL || res == -1) {
-        fprintf(stderr, "FATL: Could not connect to server...\n");
-        return -1;
-    }
     return sockfd;
 }
 
-void client_setup_game(struct Game_client *game) {
-    game->queue.head = (llist_node*)&game->queue;
-    game->queue.tail = (llist_node*)&game->queue;
-    game->queue.size = 0;
+void client_setup_game(struct Game_client *g, int servsock) {
 
-    char name[PLAYERNAME_STRLEN+1];
-    int name_len = client_prompt_name(name, PLAYERNAME_STRLEN);
-    net_send_playername(game, name, name_len);
+    initialize_deck(g->deck);
 
-    printf("Waiting for acknowledgement...");
-    fflush(stdout);
-    net_get_playerinfo(game);
-    printf(" acknowledged, your id is %d.\nWaiting for the game to start...", game->my_id);
-    fflush(stdout);
-    net_get_gameinfo(game);
-    printf(" game is starting!\n");
+    g->player.id = -1;  // waiting for this to get set by a welcome event packet
 
-    initialize_deck(game->deck);
+    llist_init(&g->player.hand);
+
+    thread_recv_init(&g->player.netinfo.pk_queue, servsock);
 }
 
 void game_print_roundpass(int round, int pass) {
@@ -437,199 +160,338 @@ void game_print_roundpass(int round, int pass) {
     if (round / 10) extra_dashes[dash_i++] = '-';
     if (pass / 10) extra_dashes[dash_i++] = '-';
     printf("\t\t\t\t\t\b\b\b------------------------%s\n", extra_dashes);
-    printf("\t\t\t\t\t\b\b\b--- Round %d - Pass %d ---\n", round+1, pass+1);
+    printf("\t\t\t\t\t\b\b\b--- Round %d - Pass %d ---\n", round + 1, pass + 1);
     printf("\t\t\t\t\t\b\b\b------------------------%s\n", extra_dashes);
 }
-void game_print_hand(struct Card_node *head, int n_cards, int selector_arr[10]) {
+void game_organize_hand(struct llist *hand, int selector_arr[20], bool print) {
     struct Packet_card buf[4][20];
     memset(buf, 0, 80 * sizeof(struct Packet_card));
-    int sizes[4] = {0};
-    int suits_remaining_tot = 4;
+    int sizes[4] = { 0 };
     char suits_remaining[5] = "AAAA";
 
     enum Suits cs = -1;
-    struct Card_node *cn = head;
-    for (int i = 0; i < n_cards; i++) {
+    struct Card_node *cn = (struct Card_node *)hand->head;
+    for (int i = 0; i < hand->size; i++) {
         assert(cn != NULL);
         cs = cn->c->suit;
         buf[cs][sizes[cs]].id = i;
         buf[cs][sizes[cs]].suit = cs;
         buf[cs][sizes[cs]].val = cn->c->value;
         sizes[cs]++;
-        cn = (struct Card_node*)cn->node.next;
+        cn = (struct Card_node *)cn->node.next;
     }
-    for (int i = 0; i < 4; i++) {
-        qsort(buf[i], sizes[i], sizeof(struct Packet_card), sort_card_packets);
-    }
-    
+    for (int i = 0; i < 4; i++) { qsort(buf[i], sizes[i], sizeof(struct Packet_card), sort_card_packets); }
+
     int i_card = 0;
     int line = 0;
-    char selector_str[16] = "";
+    char selector_str[20] = "";
     bool with_selection = (selector_arr != NULL);
-    printf(".\t.\t.\t.\t.\t.   Your Hand    .\t.\t.\t.\t.\t.\n\n");
-    printf("\tDenara\t\t\tCoppe\t\t\tBastoni\t\t\tSpade\n");
+
+    #define PRINT(...) \
+        if (print == true) printf(__VA_ARGS__);
+
+    PRINT(".\t.\t.\t.\t.\t.   Your Hand    .\t.\t.\t.\t.\t.\n\n");
+    PRINT("\tDenara\t\t\tCoppe\t\t\tBastoni\t\t\tSpade\n");
+
     while (memcmp(suits_remaining, "\0\0\0\0", 4) != 0) {
         for (int i_suit = 0; i_suit < 4; i_suit++) {
             if (line < sizes[i_suit]) {
                 if (with_selection == true) {
-                    snprintf(selector_str, 15, "\b\b\b(%s%d) ", (i_card<9)?" ":"", i_card+1);
+                    snprintf(selector_str, 18, "\b\b\b(%s%d) ", 
+                        (i_card < 9) ? " " : "", 
+                        i_card + 1);
                     selector_arr[i_card] = buf[i_suit][line].id;
                     i_card++;
                 }
-                printf("\t%s%d of %s\t", selector_str,
-                    buf[i_suit][line].val + 1, suit_to_string(buf[i_suit][line].suit));
+                PRINT("\t%s%d of %s\t",
+                    selector_str,
+                    buf[i_suit][line].val + 1,
+                    suit_to_string(buf[i_suit][line].suit));
             } else {
-                printf("\t\t%s", with_selection ? "\t" : "");
+                PRINT("\t\t%s", with_selection ? "\t" : "");
                 suits_remaining[i_suit] = '\0';
             }
         }
-        printf("\n");
+        PRINT("\n");
         line++;
     }
+    #undef PRINT
 }
 
-int client_play_round(struct Game_client *g) {
-
-    net_get_hand(g);
-
-    struct Card **thrown_cards = calloc(g->player_count, sizeof(struct Card*));
-    assert(thrown_cards != NULL);
-    int cards_remaining = (40 / g->player_count) * g->player_count;
-
-    struct Player_client *p = &g->players[g->my_id];
-    int player_card_id;
-    struct Card_node *player_card = NULL;
-    int *selector_arr = calloc(p->card_count, sizeof(int));
-
-    enum Suits pass_suit;
-    int turn_idx = g->round % g->player_count;
-    struct Card *turn_card = NULL;
-
-    int pass_winner_id;
-    int thrown_totval;
-    int extra_point;
-    
-    while (cards_remaining > 0) {
-        memset(selector_arr, 0, p->card_count * sizeof(int));
-        memset(thrown_cards, 0, g->player_count * sizeof(struct Card*));
-        pass_suit = -1;
-        extra_point = 3 * (cards_remaining == g->player_count); // last pass is worth 1 full point more
-
-        game_print_roundpass(g->round, g->pass);
-        game_print_hand((struct Card_node*)p->hand.head, p->card_count, selector_arr);
-        for (int i = 0; i < g->player_count; i++) {
-            player_card = NULL;
-            turn_card = NULL;
-            player_card_id = -1;
-
-            if (turn_idx == p->id) {
-                int selection_id = -1;
-                while (player_card == NULL) {
-                    selection_id = client_prompt_move(p, pass_suit);
-                    player_card_id = selector_arr[selection_id];
-                    player_card = find_valid_card((struct Card_node*)p->hand.head, p->card_count, player_card_id, pass_suit);
-                }
-                // dbg_selection((struct Card_node*)p->hand.head, p->card_count, selector_arr, selection_id);
-                assert(net_send_playermove(g, player_card_id) == 0);
-                llist_remove(&p->hand, player_card);
-                turn_card = net_get_moveresult(g);
-                printf("You played %d of %s.\n", turn_card->value+1, suit_to_string(turn_card->suit));
-            } else {
-                printf("It's %s's turn.\n", g->players[turn_idx].name);
-                turn_card = net_get_moveresult(g);
-                printf("%s played %d of %s.\n", g->players[turn_idx].name, 
-                    turn_card->value+1, suit_to_string(turn_card->suit));
-            }
-            if (i == 0)  {
-                pass_suit = turn_card->suit;
-                printf("This pass will be played on %s.\n", suit_to_string(turn_card->suit));
-            }
-            thrown_cards[turn_idx] = turn_card;
-
-            g->players[turn_idx].card_count--;
-            turn_idx = (turn_idx + 1) % g->player_count;
-        }
-        thrown_totval = calculate_pass_value(thrown_cards, g->player_count) + extra_point;
-        pass_winner_id = net_get_outcome(g);
-
-        printf("--- Pass goes to %s with %d of %s, got %d",
-                g->players[pass_winner_id].name,
-                thrown_cards[pass_winner_id]->value + 1,
-                suit_to_string(thrown_cards[pass_winner_id]->suit),
-                thrown_totval / 3);
-        if (thrown_totval % 3) printf(".%d", (thrown_totval % 3) * 33);
-        printf(" points ---\n");
-
-        turn_idx = pass_winner_id;
-        cards_remaining -= g->player_count;
-        g->pass++;
+void client_apply_state(struct Game_client *g, struct Game_status *s, struct Packet_hand *hand) {
+    g->player_count = s->player_count;
+    g->is_team_game = s->is_team_game;
+    g->target_score = s->target_score;
+    g->round = s->round;
+    g->pass = s->pass;
+    g->pass_master_idx = s->pass_master_idx;
+    g->pass_suit = s->pass_suit;
+    g->turn_idx = s->turn_idx;
+    g->turn_counter = s->turn_counter;
+    for (int i = 0; i < 4; i++) {
+        g->pass_cards[i] = &g->deck[s->pass_cards[i].suit * 10 + s->pass_cards[i].val];
+        strncpy(g->names[i], s->names[i], PLAYERNAME_STRLEN);
+        g->game_scores[i] = s->game_scores[i];
+        g->round_score_thirds[i] = s->round_score_thirds[i];
     }
-    // round over
 
-    assert(net_get_leaderboard(g) != -1);
+    g->player.card_count = hand->n_cards;
+    g->player.game_score = s->game_scores[g->player.id];
+    g->player.round_score_thirds = s->round_score_thirds[g->player.id];
 
-    free(thrown_cards);
-    free(selector_arr);
+    llist_nuke(&g->player.hand, NULL);  // is this fine without a fun?
+    struct Card_node *cnp;
+    for (int i = 0; i < hand->n_cards; i++) {
+        cnp = malloc(sizeof(struct Card_node));
+        assert(cnp != NULL);
 
-    // TODO: invalid move handling
+        cnp->c = &g->deck[hand->cards[i].suit * 10 + hand->cards[i].val];
+        llist_append(&g->player.hand, (llist_node *)cnp);
+    }
+}
+int client_handle_packets(struct Game_client *g) {
+    struct Packet *packet = NULL;
+    struct Server_packet *sp = NULL;
+    bool game_over = false;
+
+    while (game_over == false) {
+        // check if the connection was closed
+        if (g->player.netinfo.pk_queue.closed == true) {
+            return -1;
+        }
+
+        // get a packet from the recv thread and free its node
+        packet = pop_packet(&g->player.netinfo.pk_queue);
+
+        if (packet == NULL) {
+            usleep(300);
+            continue;
+        }
+
+        // only read server packets
+        if (packet->pk_kind != SERVER_PKT) {
+            free(packet);
+            continue;
+        }
+
+        sp = (struct Server_packet *)packet->data;
+
+        client_apply_state(g, &sp->status, &sp->hand);
+
+        switch (sp->ev_kind) {
+        case EV_WELCOME:
+            g->player.id = ((struct EV_packet_welcome *)sp->ev_data)->id;
+            printf("Acknowledged by server, your id is %d.\n", g->player.id);
+            break;
+        case EV_GAME_START:
+            printf("Game is starting !!\n");
+            break;
+        case EV_GAME_OVER:
+            client_game_over(g, (struct EV_packet_gameover *)sp->ev_data, 
+                &sp->status.names, &sp->status.game_scores);
+            game_over = true;
+            break;
+        case EV_ROUND_START:
+            printf("Cards are given.\n");
+            break;
+        case EV_ROUND_OVER:
+            client_round_over(g, (struct EV_packet_roundover *)sp->ev_data, &sp->status.names);
+            break;
+        case EV_PASS_START:
+            game_print_roundpass(g->round, g->pass);
+            game_organize_hand(&g->player.hand, g->hand_selectors, true);
+            break;
+        case EV_PASS_OVER:
+            client_pass_over(g, (struct EV_packet_passover *)sp->ev_data, &sp->status.names);
+            break;
+        case EV_TURN_START:
+            client_turn_start(g, (struct EV_packet_turnstart *)sp->ev_data, &sp->status.names);
+            break;
+        case EV_PLAYED_CARD:
+            client_played_card(g, (struct EV_packet_playedcard *)sp->ev_data, &sp->status.names);
+        case EV_NONE:
+            break;
+        }
+
+        switch (sp->rq_kind) {
+        case RQ_NAME_INVALID:
+        case RQ_NAME:
+            last_RS_name.name_len = client_prompt_name(last_RS_name.name, PLAYERNAME_STRLEN);
+        case RQ_NAME_AGAIN:
+            net_contact_server(g, RS_NAME, &last_RS_name);
+            break;
+
+        case RQ_MOVE_INVALID:
+            game_organize_hand(&g->player.hand, g->hand_selectors, true);
+            printf("Your last move was invalid, try again.\n");
+        case RQ_MOVE:
+            game_organize_hand(&g->player.hand, g->hand_selectors, false);
+            last_RS_move.round = g->round;
+            last_RS_move.pass = g->pass;
+            last_RS_move.card_id = g->hand_selectors[client_prompt_move(&g->player, g->pass_suit)];
+        case RQ_MOVE_AGAIN:
+            net_contact_server(g, RS_MOVE, &last_RS_move);
+            break;
+
+        case RQ_NONE:
+            break;
+        }
+
+        free(packet);
+    }
     return 0;
 }
-bool client_end_game(struct Game_client *game) {
-    struct Player_client *winner = &game->players[net_get_coronation(game)];
-    printf("---- GAME OVER: %s won with %d points ----\n", winner->name, winner->game_score);
 
-    close(game->socket);
-
-    char answ;
-    while (true) {
-        printf("Do you want to reconnect for another game? [y/n]: ");
-        flush_istream(fileno(stdin));
-        answ = fgetc(stdin);
-        switch (answ) {
-            case 'Y': case 'y':
-                return true;
-            case 'N': case 'n':
-                return false;
-            default:
-                printf("Invalid answer.\n");
-                continue;
-        }
+// depends on g.player_count; TODO: call end game routine??
+void client_game_over(struct Game_client *g, struct EV_packet_gameover *evp, char (*names)[4][PLAYERNAME_STRLEN+1], unsigned char (*scores)[4]) {
+    printf("** GAME OVER: %s won with %d points. **\n", (*names)[evp->winner_id], (*scores)[evp->winner_id]);
+    printf("----- final scores -----\n");
+    for (int i = 0; i < g->player_count; i++) {
+        printf("| %s with %d points \t\t|\n", (*names)[evp->winner_id], (*scores)[evp->winner_id]);
+    }
+    printf("------------------------\n");
+}
+// depends on g.player_count
+void client_round_over(struct Game_client *g, struct EV_packet_roundover *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
+    printf("--- round %d net gains ---\n", evp->round);
+    for (int i = 0; i < g->player_count; i++) {
+        printf("| %s gained %d points \t\t|\n", (*names)[i], evp->score_deltas[i]);
+    }
+    printf("-------------------------\n");
+}
+// depends on g.pass_cards
+void client_pass_over(struct Game_client *g, struct EV_packet_passover *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
+    if (g->player.id == evp->winner_id) {
+        printf("--- You won this pass with ");
+    } else {
+        printf("--- Pass goes to %s with ", (*names)[evp->winner_id]);
+    }
+    printf("%d of %s, got %d",
+        g->pass_cards[evp->winner_id]->value + 1,
+        suit_to_string(g->pass_cards[evp->winner_id]->suit),
+        evp->point_thirds_won / 3);
+    if (evp->point_thirds_won % 3 != 0)
+        printf(".%d", (evp->point_thirds_won % 3) * 33);
+    printf(" points ---\n");
+}
+// organizes hand selectors
+void client_turn_start(struct Game_client *g, struct EV_packet_turnstart *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
+    if (evp->who == g->player.id) {
+        // TODO: make better prompt
+        printf("It's your turn\n");
+    } else {
+        printf("It's %s's turn.\n", (*names)[evp->who]);
     }
 }
-
-bool is_game_over_client(struct Game_client *game) {
-    for (int i = 0; i < game->player_count; i++)
-        if (game->players[i].game_score >= game->target_score)
-            return true;
-    return false;
+// depends on g.turn_counter: needs to be the turn where the card was played
+void client_played_card(struct Game_client *g, struct EV_packet_playedcard *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
+    if (evp->whose == g->player.id) {
+        printf("You played ");
+    } else {
+        printf("%s played ", (*names)[evp->whose]);
+    }
+    printf("%d of %s.\n", evp->card.val + 1, suit_to_string(evp->card.suit));
+    if (g->turn_counter == 0) {
+        printf("This pass will be played on %s.\n", suit_to_string(evp->card.suit));
+    }
 }
 
 int main(int argc, char **argv) {
-    
     char *servaddr = "cc.dieg.one";
-    char *servport = NULL;
-    if (argc >= 2) {
-        servaddr = argv[1];
-    }
-    if (argc >= 3) {
-        servport = argv[2];
-    }
+    char servport[8];
+    snprintf(servport, 5, "%d", PORT_DEFAULT);
+    if (argc >= 2) { servaddr = argv[1]; }
+    if (argc >= 3) { strncpy(servport, argv[2], 5); }
 
     while (true) {
-        struct Game_client game = { .round = 0 };
-        game.socket = client_connect(servaddr, servport);
-        assert(game.socket != -1);
+        int servsock = -1;
+        struct Game_client game = { 0 };
 
-        client_setup_game(&game);
+        servsock = client_connect(&game.player.netinfo, servaddr, servport);
+        assert(servsock != -1);
 
-        while (is_game_over_client(&game) == false) {
-            client_play_round(&game);
-            game.round++;
+        client_setup_game(&game, servsock);
+
+        while (client_handle_packets(&game) == -1) {
+            // lost connection
+            if (client_try_reconnect(&game, servaddr, servport) == true)
+                continue;
+            else
+                return 1;
         }
 
-        if (client_end_game(&game) == true) 
+        if (client_end_game(&game) == true)
             continue;
-        else 
+        else
             break;
     }
+
+    printf("Thanks for playing ~~~!");
+    return 0;
 }
+
+bool client_end_game(struct Game_client *g) {
+    char answ;
+    while (true) {
+        printf("Do you want to reconnect for another game? [y/n]: ");
+        flush_instream(stdin);
+        answ = fgetc(stdin);
+        switch (answ) {
+        case 'Y':
+        case 'y':
+            return true;
+        case 'N':
+        case 'n':
+            return false;
+        default:
+            printf("Invalid answer.\n");
+            continue;
+        }
+    }
+}
+
+bool client_try_reconnect(struct Game_client *g, char *addr, char *port) {
+    char answ;
+    while (true) {
+        printf("Connection lost, do you want to try reconnecting? [y/n]: ");
+        flush_instream(stdin);
+        answ = fgetc(stdin);
+        switch (answ) {
+        case 'Y':
+        case 'y':
+            break;
+        case 'N':
+        case 'n':
+            return false;
+        default:
+            printf("Invalid answer.\n");
+            continue;
+        }
+
+        int servsock = client_connect(&g->player.netinfo, addr, port);
+        if (servsock == -1) { return false; }
+
+        client_setup_game(g, servsock);
+
+        return true;
+    }
+}
+
+// void dbg_selection(struct Card_node *head, int n_cards, int *selector_arr,
+//                    int selection_id) {
+//     struct Card_node *cn = NULL;
+//     for (int i = 0; i < n_cards; i++) {
+//         printf("Selection %d -> %d: ", i + 1, selector_arr[i]);
+//         cn = head;
+//         for (int j = 0; j < n_cards; j++) {
+//             if (selector_arr[i] == j) {
+//                 printf("%d of %s:%d\n", cn->c->value + 1, suit_to_string(cn->c->suit),
+//                        cn->c->suit);
+//                 if (i == selection_id)
+//                     printf("^^^\t this is what you played.\n");
+//                 break;
+//             }
+//             cn = (struct Card_node *)cn->node.next;
+//         }
+//     }
+// }
