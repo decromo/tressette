@@ -16,6 +16,8 @@
 #   include <netdb.h>
 #endif  // __MINGW32__
 
+#include <raylib.h>
+
 #include "client.h"
 #include "client_network.h"
 #include "common.h"

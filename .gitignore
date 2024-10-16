@@ -1,0 +1,14 @@
+.direnv
+offline/
+
+result
+server
+client
+*.so
+
+core*
+*.zip
+
+source
+a
+b
