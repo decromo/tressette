@@ -104,6 +104,7 @@ void thread_recv_destroy(void *arg) {
     close(pk_q->socket);
 }
 
+// returns NULL if queue is empty
 struct Packet *pop_packet(struct PQueue *pq) {
     if (pq->queue.size == 0 || pq->queue.head == (struct llist_node*) &pq->queue)
         return NULL;

@@ -86,14 +86,16 @@ void llist_nuke(void *list, void (fun)(void *node)) {
         llist_remove(ll, n);
     }
     // just to be sure
-    llist_init(list);
+    ll->head = (llist_node *)ll;
+    ll->tail = (llist_node *)ll;
+    ll->size = 0;
 }
 
 // make sure the list is empty, otherwise the data of its nodes will leak
 void llist_init(void *list) {
     assert(list != NULL);
 
-    // llist_nuke(list, NULL);
+    llist_nuke(list, NULL);
     llist *ll = list;
 
     ll->head = (llist_node *)ll;

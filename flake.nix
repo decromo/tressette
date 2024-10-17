@@ -8,121 +8,81 @@
   outputs = { self, nixpkgs }: 
   let
     system = "x86_64-linux";
-    pkgs = import nixpkgs { inherit system; };
-    lib = pkgs.lib;
-    mkBin = name: pkgs.runCommandCC name { src = ./.; buildInputs = [ self.packages.${system}.raylib ]; }
-    ''
-      mkdir -p $out/bin
-      pushd .
-      cd $src
-      DEST=/build $src/build.sh && popd; cp -t $out/bin ${name}
-    '';
 
-    commonMainFiles = lib.concatStringsSep " " [
-    ];
-    commonSecoFiles = lib.concatStringsSep " " [
-      # "seco_server.c"
-    ];
-    serverMainFiles = lib.concatStringsSep " " [
-      # "seco_client.c"
-    ];
-    serverSecoFiles = lib.concatStringsSep " " [
+    raylib = self.packages.${system}.raylib-static-ext;
+
+    commonMainFiles = [
       "utils.c"
       "network.c"
       "common.c"
       "threads.c"
     ];
-    clientMainFiles = lib.concatStringsSep " " [
-      "server.c"
-      "server_network.c"
-    ];
-    clientSecoFiles = lib.concatStringsSep " " [
+    clientMainFiles = [
       "client.c"
       "client_network.c"
     ];
-  in {
+    serverMainFiles = [
+      "server.c"
+      "server_network.c"
+    ];
+    commonSecoFiles = [
+    ];
+    serverSecoFiles = [
+      # "seco_server.c"
+    ];
+    clientSecoFiles = [
+      # "seco_client.c"
+    ];
+    
+    # Not much needs to be changed from here down
 
-    packages.${system} = rec {
-      raylib-nixpkgs = pkgs.raylib;
-      raylib-dynamic = pkgs.callPackage ./nix/raylib.nix { sharedLib = true; waylandSupport = true; externalGLFW = false; };
-      raylib-rglfw = pkgs.callPackage ./nix/raylib.nix { sharedLib = false; waylandSupport = true; externalGLFW = false; };
-      raylib-web = pkgs.callPackage ./nix/raylib.nix { webPlatform = true; };
-      raylib-extglfw = (pkgs.callPackage ./nix/raylib.nix { sharedLib = false; waylandSupport = true; externalGLFW = true; } );
-
-      raylib = raylib-nixpkgs;
-
-      client = mkBin "client";
-
-      server = mkBin "server";
-
-      all = mkBin "client server";
-
-      default = tressette;
-
-      tressette = pkgs.stdenv.mkDerivation rec {
-        pname = "tressette";
+    mkBin = { pname, files, extraCompilerArgs ? "", outName ? pname, raylibDrv ? raylib }:
+      pkgs.stdenv.mkDerivation (finalAttrs: {
+        inherit pname;
         version = "0.0.1";
         src = ./src;
 
-        buildInputs = with pkgs; [
-          self.packages.${system}.raylib
-        ];
+        buildInputs = with pkgs; [ raylibDrv ];
 
-        buildPhase =
-          let
-            serverFiles = [
-              commonMainFiles
-              commonSecoFiles
-              serverMainFiles
-              serverSecoFiles
-            ];
-            clientFiles = [
-              commonMainFiles
-              commonSecoFiles
-              clientMainFiles
-              clientSecoFiles
-            ];
-          in ''
-            gcc ${lib.concatStringsSep " " serverFiles}  -o s.out
-            gcc ${lib.concatStringsSep " " clientFiles}  -o c.out
-          '';
+        buildPhase = ''gcc ${files} ${raylibDrv.compileFlags} ${extraCompilerArgs}'';
 
         installPhase = ''
           mkdir -p $out/bin
-          cp s.out $out/bin/${pname}-server
-          cp c.out $out/bin/${pname}-client
+          cp a.out $out/bin/${outName}
         '';
-      };
+      });
+
+    clientPlugFiles = lib.concatStringsSep " " (commonSecoFiles ++ clientSecoFiles);
+    serverPlugFiles = lib.concatStringsSep " " (commonSecoFiles ++ serverSecoFiles);
+
+    clientFiles = clientPlugFiles + (lib.concatStringsSep " " (commonMainFiles ++ clientMainFiles ));
+    serverFiles = serverPlugFiles + (lib.concatStringsSep " " (commonMainFiles ++ serverMainFiles ));
+
+    sourceFiles = { inherit clientPlugFiles serverPlugFiles clientFiles serverFiles; };
+
+    callRaylib = pkgs.callPackage ./nix/raylib.nix;
+    pkgs = import nixpkgs { inherit system; };
+    lib = pkgs.lib;
+  in {
+
+    packages.${system} = rec {
+      raylib-dyn = callRaylib { sharedLib = true; externalGLFW = true; };
+      raylib-dyn-ext = callRaylib { sharedLib = true; externalGLFW = true; };
+      raylib-static = callRaylib { sharedLib = false; externalGLFW = false; };
+      raylib-static-ext = callRaylib { sharedLib = false; externalGLFW = true; };
+      raylib-web = callRaylib { webPlatform = true; };
+      raylib-X11 = callRaylib { sharedLib = true; externalGLFW = true; waylandSupport = false; };
+      raylib-nixpkgs = pkgs.raylib.overrideAttrs { passthru.compileFlags = "-lraylib -lGL -lm -lpthread -ldl -lrt"; };
+
+      client = mkBin { pname = "tressette-client"; files = clientFiles; };
+      server = mkBin { pname = "tressette-server"; files = serverFiles; };
+
+      tressette = pkgs.symlinkJoin { name = "tressette"; paths = [ client server ];};
+
+      default = tressette;
     };
 
-    devShells.${system}.default = 
-    let
-      raylib = self.packages.${system}.raylib;
-      ccseco = pkgs.writeShellApplication {
-        name = "ccseco";
-        runtimeInputs = [ raylib ];
-        text = ''
-          cd src
-          gcc -shared -o ../libsecoserver.so -fPIC -DPLUG_DEV_ON ${commonSecoFiles} ${serverSecoFiles} 
-          gcc -shared -o ../libsecoclient.so -fPIC -DPLUG_DEV_ON ${commonSecoFiles} ${clientSecoFiles} 
-        '';
-      };
-    in pkgs.mkShell {
-      buildInputs = [ 
-        raylib
-        ccseco
-        (pkgs.writeShellApplication {
-          name = "ccmain";
-          runtimeInputs = [ raylib ccseco ];
-          text = ''
-            (ccseco)
-            cd src
-            gcc -DPLUG_DEV_ON ${commonMainFiles} ${serverMainFiles}  -Wall -pthread -g -o ../server;
-            gcc -DPLUG_DEV_ON ${commonMainFiles} ${clientMainFiles}  -Wall -pthread -g -o ../client;
-          '';
-        })
-      ];
-    };
+    devShells.${system}.default = import ./shell.nix { inherit pkgs raylib sourceFiles; };
 
   };
 }
