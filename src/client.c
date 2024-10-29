@@ -24,6 +24,8 @@
 #include "network.h"
 #include "threads.h"
 
+#include "client_plug.h"
+
 struct RS_packet_move last_RS_move = { 0 };
 struct RS_packet_name last_RS_name = { 0 };
 
@@ -35,7 +37,7 @@ struct addrinfo *client_addrinfo(char *addr, char *port) {
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_family = AF_INET;
-    hints.ai_flags = 0;
+    hints.ai_flags = AI_CANONNAME;
     hints.ai_protocol = 0;
 
     struct addrinfo *ai_res;
@@ -52,33 +54,37 @@ struct addrinfo *client_addrinfo(char *addr, char *port) {
 }
 int client_connect(struct Player_netinfo *netinfo, struct addrinfo *ai_list) {
     int sockfd = -1, 
-        res = 0,
-        one = 1;
+        res = 0;
 
     struct addrinfo *ain;
 
-    printf("Trying to connect to server at %s:%d   ", ai_list->ai_canonname, ai_list->ai_protocol);
-    static int retries = 0;
-    if (retries % 4 == 0) {
-        printf("\b\b\b   \b\b\b");
-    } else {
-        printf(".");
+    {
+        static int retries = 0;
+        if (retries % 60 == 0) {
+            char status[512] = {0};
+            sprintf(status, "Trying to connect to server at %s:%d", ai_list->ai_canonname, ntohs(((struct sockaddr_in*)ai_list->ai_addr)->sin_port));
+            for (int i = 0; i < (retries / 60) % 4; i++) {
+                strcat(status, ".");
+            }
+            render_status_text(strlen(status), status);
+        }
+        retries++;
     }
-                        // printf("\b\b\b");
-                        // for (int i = 0; i < 3; i++) {
-                        //     printf("%s", i < (retries % 4) ? "." : " ");
-                        // }
-        // fflush(stdout);
+
     for (ain = ai_list; ain != NULL; ain = ain->ai_next) {
-        if ((res = socket(ain->ai_family, ain->ai_socktype, ain->ai_protocol)) == -1) {
+        res = socket(ain->ai_family, ain->ai_socktype, ain->ai_protocol);
+        if (res == -1) {
             perror("WARN: socket");
             continue;
         };
+        sockfd = res;
 
-        if (setsockopt(res, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one) == -1) {
-            perror("ERRO: setsockopt"); }
+        res = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+        if (res == -1) {
+            perror("ERRO: setsockopt");
+        }
 
-        if (connect(res, ain->ai_addr, ain->ai_addrlen) == 0) {
+        if (connect(sockfd, ain->ai_addr, ain->ai_addrlen) == 0) {
             // if (fcntl(res, F_SETFL, O_NONBLOCK) == -1) {
             //     perror("ERRO: fcntl");
             // }
@@ -86,22 +92,17 @@ int client_connect(struct Player_netinfo *netinfo, struct addrinfo *ai_list) {
 
             memccpy(&netinfo->addr, ain->ai_addr, 0, sizeof(*ain->ai_addr));
             netinfo->addr_len = ain->ai_addrlen;
-            sockfd = res;
 
             break;
         }
 
         // if (shutdown(res, SHUT_RDWR) == -1) { perror("WARN: shutdown"); }
-        close(res);
-        res = -1;
-        break;
+        close(sockfd);
+        sockfd = -1;
     }
 
-        // Connection successful
-    if (ain != NULL && res != -1) {
-    } else {
-        // Connection unsuccessful, return and retry;
-        sleep(1);
+    // Connection unsuccessful, return -1 and retry later
+    if (ain == NULL || sockfd == -1) {
         sockfd = -1;
     }
 
@@ -186,7 +187,7 @@ void game_print_roundpass(int round, int pass) {
     printf("\t\t\t\t\t\b\b\b------------------------%s\n", extra_dashes);
 }
 
-int client_prompt_name(char *name, int maxlen) {
+int client_prompt_name(unsigned int maxlen, char *name) {
     size_t bufsiz = maxlen + 2;
     char *buf = calloc(bufsiz, sizeof(char));
     int ret;
@@ -387,7 +388,7 @@ int client_handle_packets(struct Game_client *g) {
         switch (sp->rq_kind) {
         case RQ_NAME_INVALID:
         case RQ_NAME:
-            last_RS_name.name_len = client_prompt_name(last_RS_name.name, PLAYERNAME_STRLEN);
+            last_RS_name.name_len = client_prompt_name(PLAYERNAME_STRLEN, last_RS_name.name);
         case RQ_NAME_AGAIN:
             net_contact_server(g, RS_NAME, &last_RS_name);
             break;
@@ -465,45 +466,74 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    SetConfigFlags(FLAG_WINDOW_TOPMOST | FLAG_WINDOW_HIGHDPI | FLAG_BORDERLESS_WINDOWED_MODE);
     InitWindow(800, 600, "tressette");
+    SetTargetFPS(60);
+    // SetWindowMonitor(0);
+    SetWindowPosition(5000, 0);
 
-    while (true) {
+    while (!WindowShouldClose()) {
         int servsock = -1;
         struct Game_client game = { 0 };
 
         bool connection_established = false;
+        bool lost_connection = false;
+        bool game_over = false;
         bool game_aborted = false;
-        while (!WindowShouldClose() && game_aborted == false) {
+        while (true) {
 
-            if (connection_established == false) {
+            plug_open();
+            plug_init();
+
+            if (!connection_established) {
                 servsock = client_connect(&game.player.netinfo, serv_ai);
-                if (servsock != -1) {
-                    connection_established = true;
-                    client_setup_game(&game, servsock);
-                }
+
+                if (servsock == -1) { goto render; }
+
+                connection_established = true;
+                client_setup_game(&game, servsock);
             }
 
-            // lost connection
-            if (-1 == client_handle_packets(&game)) {
+            switch (client_handle_packets(&game)) {
+            case 0: // exit switch and continue playing
+                break;
+            case 1: // game is over
+                game_over = true;
+                break;
+            case -1: // lost connection
                 connection_established = false;
-                if (client_prompt_reconnect() == false) {
-                    game_aborted = true;
-                    continue;
-                }
+                lost_connection = true;
+                break;
+            default:
+                break;
             }
 
-            // render loop
+        render:
+            render_loop();
+            
+            plug_close();
+        // end render
+
+        if (lost_connection && !client_prompt_reconnect()) {
+                game_aborted = true;
+                break;
+            }
+
+            if (game_over && !client_prompt_endgame()) {
+                break;
+            }
+
+            if (WindowShouldClose()) {
+                break;
+            }
         }
 
-        if (false == client_prompt_endgame()) {
-            break;
-        }
+        // loop over and start a new game
     }
 
-    printf("Thanks for playing ~~~!");
+    printf("Thanks for playing ~~~!\n");
     freeaddrinfo(serv_ai);
 
-    EndDrawing();
     CloseWindow();
 
     return 0;

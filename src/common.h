@@ -10,9 +10,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-
-#include "network.h"
-
 typedef struct llist_node {
     struct llist_node *next;
     struct llist_node *prev;
@@ -80,6 +77,8 @@ void llist_append(void *list, void *node);
 void llist_remove(void *list, void *node);
 void llist_init(void *list);
 void llist_nuke(void *list, void (fun)(void *node));
+
+void linefeed_string(int len, char *str, size_t bufsiz, int line_maxlen, int over_len_maxchars, int prec_lf_maxchars);
 
 char *suit_to_string(enum Suits s);
 void initialize_deck(struct Card *cs);

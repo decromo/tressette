@@ -67,25 +67,18 @@ stdenv.mkDerivation (finalAttrs: {
   patches = [ ./no-root-install.patch ./no-ldconfig.patch ];
 
   makeFlags =
-    if webPlatform then [ "PLATFORM=PLATFORM_WEB" ]
+    if webPlatform
+    then ["PLATFORM=PLATFORM_WEB"]
     else [
       "PLATFORM=PLATFORM_DESKTOP"
-
-      (if sharedLib
-        then "RAYLIB_LIBTYPE=SHARED"
-        else "RAYLIB_LIBTYPE=STATIC")
-
+      (if sharedLib then "RAYLIB_LIBTYPE=SHARED" else ''RAYLIB_LIBTYPE=STATIC CUSTOM_CFLAGS="-fPIC"'')
       # to use internal glfw, you must patch your binary with
       # postFixup = ''patchelf $out/bin/${pname} --add-needed {every library} --add-rpath ${lib.makeLibraryPath [wayland libxkbcommon]}''
       # or compile your binary with the compileFlags from passtrhu
-      (if externalGLFW
-        then "USE_EXTERNAL_GLFW=TRUE"
-        else "USE_EXTERNAL_GLFW=FALSE")
-
+      (if externalGLFW then "USE_EXTERNAL_GLFW=TRUE" else "USE_EXTERNAL_GLFW=FALSE")
       (if waylandSupport
         then "USE_WAYLAND_DISPLAY=TRUE GLFW_LINUX_ENABLE_WAYLAND=TRUE"
         else "USE_WAYLAND_DISPLAY=FALSE GLFW_LINUX_ENABLE_WAYLAND=FALSE")
-
       (lib.optionalString includeEverything 
         ''RAYLIB_MODULE_RAYGUI=TRUE RAYLIB_MODULE_RAYGUI_PATH="${finalAttrs.raygui}/src"'')
     ]
@@ -103,20 +96,13 @@ stdenv.mkDerivation (finalAttrs: {
   passthru = {
     # With a certain configuration, we need to link against other libraries, insert ${raylib.compileFlags} inside your compilation command to get them automatically
     compileFlags = lib.concatStringsSep " " [
-
       "-lraylib" "-lGL" "-lm" "-lpthread" "-ldl" "-lrt"
-
-      (lib.optionalString (sharedLib && waylandSupport && !externalGLFW)
-        "-lwayland-cursor -lwayland-egl -lxkbcommon")
-
-      (lib.optionalString (!sharedLib && externalGLFW)
-        "-lglfw")
-
-      (lib.optionalString (!sharedLib && !externalGLFW)
-        (if waylandSupport 
-          then "-lwayland-client -lxkbcommon"
-          else "-lX11"))
-
+      (lib.optionalString (sharedLib && waylandSupport && !externalGLFW) "-lwayland-cursor -lwayland-egl -lxkbcommon")
+      (lib.optionalString (!sharedLib && externalGLFW) "-lglfw")
+      (lib.optionalString (!sharedLib && !externalGLFW) (if waylandSupport 
+        then "-lwayland-client -lxkbcommon"
+        else "-lX11")
+      )
       # leaner and meaner variant
       # (if waylandSupport 
       #   then "-lwayland-cursor -lwayland-egl -lxkbcommon"
@@ -137,12 +123,11 @@ stdenv.mkDerivation (finalAttrs: {
 
 # Notes:
 # - I'm not sure, but it seems that most '-l' compile flags are needed only with a static library, since the dynamic library probably already links to them by itself
-# always needed: -lraylib
-# static: -lm -lGL
-  # external: -lglfw
-  # internal wayland: -lwayland-client -lxkbcommon
-  # internal X11: -lX11
-# dynamic and internal and wayland: -lwayland-cursor -lwayland-egl -lxkbcommon
-
+# always: -lraylib
+  # static: -lm -lGL
+    # external: -lglfw
+    # internal wayland: -lwayland-client -lxkbcommon
+    # internal X11: -lX11
+  # dynamic and internal and wayland: -lwayland-cursor -lwayland-egl -lxkbcommon 
 # it looks like linking with wayland-cursor also links automatically with wayland-client
 

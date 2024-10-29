@@ -10,6 +10,7 @@
     system = "x86_64-linux";
 
     raylib = self.packages.${system}.raylib-static-ext;
+    raylib-dev = self.packages.${system}.raylib-dynamic-ext;
 
     commonMainFiles = [
       "utils.c"
@@ -20,6 +21,7 @@
     clientMainFiles = [
       "client.c"
       "client_network.c"
+      "client_plug.c"
     ];
     serverMainFiles = [
       "server.c"
@@ -31,7 +33,7 @@
       # "seco_server.c"
     ];
     clientSecoFiles = [
-      # "seco_client.c"
+      "client_seco.c"
     ];
     
     # Not much needs to be changed from here down
@@ -42,7 +44,7 @@
         version = "0.0.1";
         src = ./src;
 
-        buildInputs = with pkgs; [ raylibDrv ];
+        buildInputs = /* with pkgs; */ [ raylibDrv ];
 
         buildPhase = ''gcc ${files} ${raylibDrv.compileFlags} ${extraCompilerArgs}'';
 
@@ -52,13 +54,16 @@
         '';
       });
 
-    clientPlugFiles = lib.concatStringsSep " " (commonSecoFiles ++ clientSecoFiles);
-    serverPlugFiles = lib.concatStringsSep " " (commonSecoFiles ++ serverSecoFiles);
+    clientSecoFilesString = lib.concatStringsSep " " (commonSecoFiles ++ clientSecoFiles);
+    serverSecoFilesString = lib.concatStringsSep " " (commonSecoFiles ++ serverSecoFiles);
 
-    clientFiles = clientPlugFiles + (lib.concatStringsSep " " (commonMainFiles ++ clientMainFiles ));
-    serverFiles = serverPlugFiles + (lib.concatStringsSep " " (commonMainFiles ++ serverMainFiles ));
+    clientMainFilesString = lib.concatStringsSep " " (commonMainFiles ++ clientMainFiles);
+    serverMainFilesString = lib.concatStringsSep " " (commonMainFiles ++ serverMainFiles);
+    
+    clientFilesString = "${clientMainFilesString} ${clientSecoFilesString}";
+    serverFilesString = "${serverMainFilesString} ${serverSecoFilesString}";
 
-    sourceFiles = { inherit clientPlugFiles serverPlugFiles clientFiles serverFiles; };
+    sourceFiles = { inherit clientSecoFilesString serverSecoFilesString clientMainFilesString serverMainFilesString; };
 
     callRaylib = pkgs.callPackage ./nix/raylib.nix;
     pkgs = import nixpkgs { inherit system; };
@@ -66,23 +71,26 @@
   in {
 
     packages.${system} = rec {
-      raylib-dyn = callRaylib { sharedLib = true; externalGLFW = true; };
-      raylib-dyn-ext = callRaylib { sharedLib = true; externalGLFW = true; };
+      raylib-dynamic = callRaylib { sharedLib = true; externalGLFW = true; };
+      raylib-dynamic-ext = callRaylib { sharedLib = true; externalGLFW = true; };
       raylib-static = callRaylib { sharedLib = false; externalGLFW = false; };
       raylib-static-ext = callRaylib { sharedLib = false; externalGLFW = true; };
       raylib-web = callRaylib { webPlatform = true; };
-      raylib-X11 = callRaylib { sharedLib = true; externalGLFW = true; waylandSupport = false; };
+      raylib-X11 = callRaylib { sharedLib = true; externalGLFW = false; waylandSupport = false; };
       raylib-nixpkgs = pkgs.raylib.overrideAttrs { passthru.compileFlags = "-lraylib -lGL -lm -lpthread -ldl -lrt"; };
 
-      client = mkBin { pname = "tressette-client"; files = clientFiles; };
-      server = mkBin { pname = "tressette-server"; files = serverFiles; };
+      client = mkBin { pname = "tressette-client"; files = clientFilesString; };
+      server = mkBin { pname = "tressette-server"; files = serverFilesString; };
 
       tressette = pkgs.symlinkJoin { name = "tressette"; paths = [ client server ];};
 
       default = tressette;
     };
 
-    devShells.${system}.default = import ./shell.nix { inherit pkgs raylib sourceFiles; };
+    devShells.${system}.default = import ./shell.nix { 
+      raylib = raylib-dev;
+      inherit pkgs sourceFiles;
+    };
 
   };
 }
