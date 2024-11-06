@@ -31,8 +31,8 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "raysan5";
     repo = "raylib";
-    rev = "c9c830cb971d7aa744fe3c7444b768ccd5176c4c";
-    hash = "sha256-PHYdAEhittShd1UhASdhmq0nGHEEVZEUGcjCUUJZl9g=";
+    rev = "b47fffb48bfeb6a73060c5fb8847d8db2879110c";
+    hash = "sha256-KhXAu0LMnFJK+FWfDaKbyNFj5381Vgd/NblvzF3fG0A=";
   };
   src5 = fetchFromGitHub {
     owner = "raysan5";

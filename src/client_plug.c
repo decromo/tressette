@@ -1,7 +1,7 @@
 #define _GNU_SOURCE
 #include <stdbool.h>
 
-#include "client_plug.h"
+#include "client/client_plug.h"
 
 static void *renderMemory;
 void plug_init() {

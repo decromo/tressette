@@ -8,12 +8,7 @@
 #include <assert.h>
 #include <unistd.h>
 
-
-#ifdef __MINGW32__
-#include "windef.h"
-#else
-#include <sys/socket.h>
-#endif // __MINGW32__
+#include "../common/platform.h"
 
 #include "common.h"
 #include "network.h"

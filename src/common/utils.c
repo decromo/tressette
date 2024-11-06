@@ -3,6 +3,7 @@
 #include <assert.h>
 
 #include "common.h"
+#include "raylib.h"
 
 void llist_add(void *list, void *node) {
     llist *ll = list;
@@ -103,6 +104,59 @@ void llist_init(void *list) {
     ll->head = (llist_node *)ll;
     ll->tail = (llist_node *)ll;
     ll->size = 0;
+}
+
+void dynarray_append(void **arr_raw, size_t elem_size, void *elem) {
+    struct dynarray {
+        size_t capacity;
+        size_t size;
+        char data[];
+    }__attribute__((packed));
+    struct dynarray *arr = *arr_raw;
+
+    // Expand the array size if needed with realloc
+    if (arr->capacity == arr->size) {
+        size_t new_capacity = arr->capacity*1.5 + 1;
+        void *res = realloc(*arr_raw, sizeof(struct dynarray) + elem_size*new_capacity);
+        if (res == NULL) {
+            TraceLog(LOG_FATAL, "Could not realloc dynamic array");
+            exit(1);
+        }
+        *arr_raw = arr = res;
+        arr->capacity = new_capacity;
+    }
+
+    // Copy new element over
+    memcpy(&arr->data[arr->size*elem_size], elem, elem_size);
+}
+void dynarray_insert(void **arr_raw, size_t elem_size, size_t index, void *elem) {
+    struct dynarray {
+        size_t capacity;
+        size_t size;
+        char data[];
+    }__attribute__((packed));
+
+    assert(arr_raw != NULL);
+    assert(*arr_raw != NULL);
+    struct dynarray *arr = *arr_raw;
+
+    // Expand the array size if needed with realloc
+    if (index >= arr->capacity) {
+        size_t new_capacity = index + 1;
+        void *res = realloc(*arr_raw, sizeof(struct dynarray) + elem_size*new_capacity);
+        if (res == NULL) {
+            TraceLog(LOG_FATAL, "Could not realloc dynamic array");
+            exit(1);
+        }
+        *arr_raw = arr = res;
+        arr->capacity = new_capacity;
+    }
+
+    // Copy new element in desired index
+    // char (*data_arr)[elem_size][arr->capacity] = (char (*)[elem_size][arr->capacity])arr->data;
+    // memcpy(&data_arr[index], elem, elem_size);
+    memcpy(&arr->data[elem_size*index], elem, elem_size);
+    // arr->data[index] = (void(*)(void)) elem;
 }
 
 // inserts newline ('\n') characters, without splitting words if possible.

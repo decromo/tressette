@@ -78,6 +78,9 @@ void llist_remove(void *list, void *node);
 void llist_init(void *list);
 void llist_nuke(void *list, void (fun)(void *node));
 
+void dynarray_append(void **arr_ptr, size_t elem_size, void *elem);
+void dynarray_insert(void **arr_ptr, size_t elem_size, size_t index, void *elem);
+
 void linefeed_string(int len, char *str, size_t bufsiz, int line_maxlen, int over_len_maxchars, int prec_lf_maxchars);
 
 char *suit_to_string(enum Suits s);

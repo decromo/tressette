@@ -1,5 +1,5 @@
-#ifndef WINDEF_H
-#define WINDEF_H
+#ifndef PLATFORM_H
+#define PLATFORM_H
 
 
 #ifdef __MINGW32__
@@ -73,6 +73,11 @@ static inline ssize_t getdelim(char **buf, size_t *bufsiz, int delimiter, FILE *
 #define getline(buf, bufsiz, fp) \
     getdelim(buf, bufsiz, '\n', fp);
 
+#else // __MINGW_32__
+#   include <sys/socket.h>
+#   include <netinet/in.h>
+#   include <arpa/inet.h>
+#   include <netdb.h>
 #endif // __MINGW_32__
 
-#endif // WINDEF_H
+#endif // PLATFORM_H

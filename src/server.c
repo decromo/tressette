@@ -5,28 +5,20 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <string.h>
 #include <sys/time.h>
 #include <assert.h>
 
-#ifdef __MINGW32__
-#   include "windef.h"
-#else
-#   include <sys/socket.h>
-#   include <netinet/in.h>
-#   include <arpa/inet.h>
-#   include <netdb.h>
-#endif // __MINGW32__
+#include "common/platform.h"
 
-#include "server.h"
-#include "server_network.h"
+#include "server/server.h"
+#include "server/server_network.h"
 
-#include "common.h"
-#include "network.h"
-#include "threads.h"
-#include "pthread.h"
+#include "common/common.h"
+#include "common/network.h"
+#include "common/threads.h"
 
 // int admin_idx = 0;
 

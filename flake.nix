@@ -13,30 +13,34 @@
     raylib-dev = self.packages.${system}.raylib-dynamic-ext;
 
     commonMainFiles = [
-      "utils.c"
-      "network.c"
-      "common.c"
-      "threads.c"
     ];
     clientMainFiles = [
       "client.c"
-      "client_network.c"
       "client_plug.c"
     ];
     serverMainFiles = [
       "server.c"
-      "server_network.c"
+      "server/server_network.c"
     ];
     commonSecoFiles = [
+      "common/utils.c"
+      "common/network.c"
+      "common/common.c"
+      "common/threads.c"
     ];
     serverSecoFiles = [
       # "seco_server.c"
     ];
     clientSecoFiles = [
-      "client_seco.c"
+      "client/client_seco.c"
+      "client/scenes/connection.c"
+      "client/scenes/game.c"
+
+      "client/client_main.c"
+      "client/client_network.c"
     ];
     
-    # Not much needs to be changed from here down
+    # Not much needs to be changed down from here
 
     mkBin = { pname, files, extraCompilerArgs ? "", outName ? pname, raylibDrv ? raylib }:
       pkgs.stdenv.mkDerivation (finalAttrs: {
