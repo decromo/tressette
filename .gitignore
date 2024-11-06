@@ -2,8 +2,8 @@
 offline/
 
 result
-server
-client
+./server
+./client
 *.so
 
 core*
