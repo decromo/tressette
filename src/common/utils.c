@@ -117,7 +117,7 @@ void dynarray_append(void **arr_raw, size_t elem_size, void *elem) {
     // Expand the array size if needed with realloc
     if (arr->capacity == arr->size) {
         size_t new_capacity = arr->capacity*1.5 + 1;
-        void *res = realloc(*arr_raw, sizeof(struct dynarray) + elem_size*new_capacity);
+        void *res = realloc(*arr_raw, sizeof(*arr) + elem_size*new_capacity);
         if (res == NULL) {
             TraceLog(LOG_FATAL, "Could not realloc dynamic array");
             exit(1);
@@ -143,7 +143,7 @@ void dynarray_insert(void **arr_raw, size_t elem_size, size_t index, void *elem)
     // Expand the array size if needed with realloc
     if (index >= arr->capacity) {
         size_t new_capacity = index + 1;
-        void *res = realloc(*arr_raw, sizeof(struct dynarray) + elem_size*new_capacity);
+        void *res = realloc(*arr_raw, sizeof(*arr) + elem_size*new_capacity);
         if (res == NULL) {
             TraceLog(LOG_FATAL, "Could not realloc dynamic array");
             exit(1);
@@ -153,10 +153,7 @@ void dynarray_insert(void **arr_raw, size_t elem_size, size_t index, void *elem)
     }
 
     // Copy new element in desired index
-    // char (*data_arr)[elem_size][arr->capacity] = (char (*)[elem_size][arr->capacity])arr->data;
-    // memcpy(&data_arr[index], elem, elem_size);
     memcpy(&arr->data[elem_size*index], elem, elem_size);
-    // arr->data[index] = (void(*)(void)) elem;
 }
 
 // inserts newline ('\n') characters, without splitting words if possible.

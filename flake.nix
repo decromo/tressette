@@ -56,6 +56,8 @@
           mkdir -p $out/bin
           cp a.out $out/bin/${outName}
         '';
+
+        passthru = { inherit (finalAttrs) buildPhase; };
       });
 
     clientSecoFilesString = lib.concatStringsSep " " (commonSecoFiles ++ clientSecoFiles);
@@ -82,6 +84,13 @@
       raylib-web = callRaylib { webPlatform = true; };
       raylib-X11 = callRaylib { sharedLib = true; externalGLFW = false; waylandSupport = false; };
       raylib-nixpkgs = pkgs.raylib.overrideAttrs { passthru.compileFlags = "-lraylib -lGL -lm -lpthread -ldl -lrt"; };
+
+      echo-build = pkgs.writeShellScriptBin "echo-build" ''
+        cat << 'EOF'
+        ${client.buildPhase}
+        ${server.buildPhase}
+        EOF
+      '';
 
       client = mkBin { pname = "tressette-client"; files = clientFilesString; };
       server = mkBin { pname = "tressette-server"; files = serverFilesString; };
