@@ -1,14 +1,21 @@
-{ 
-  pkgs ? import <nixpkgs>
-  , lib ? pkgs.lib
-  , raylib ? pkgs.raylib.overrideAttrs { passthru.compileFlags = "-lraylib -lGL -lm -lpthread -ldl -lrt"; }
-  , sourceFiles
-  , extraCompilerArgs ? ""
+{
+  pkgs ? import <nixpkgs>,
+  lib ? pkgs.lib,
+  raylib ? pkgs.raylib.overrideAttrs {
+    passthru.compileFlags = "-lraylib -lGL -lm -lpthread -ldl -lrt";
+  },
+  sourceFiles,
+  extraCompilerArgs ? "",
 }:
 
 let
 
-  inherit (sourceFiles) serverMainFilesString clientMainFilesString serverSecoFilesString clientSecoFilesString;
+  inherit (sourceFiles)
+    serverMainFilesString
+    clientMainFilesString
+    serverSecoFilesString
+    clientSecoFilesString
+    ;
 
   compilerFlags = lib.concatStringsSep " " [
     raylib.compileFlags
@@ -18,95 +25,111 @@ let
     ''"''${cmdLineCompileFlags[@]}"''
   ];
 
-  mainCompilerCommand = ''
-      gcc ${serverMainFilesString} ${compilerFlags} -export-dynamic -o ../server;
-      gcc ${clientMainFilesString} ${compilerFlags} -export-dynamic -o ../client;
-  '';
-
-  secoCompilerCommand = ''
-      # gcc -shared -o ../libsecoserver.so -fPIC ${compilerFlags} ${serverSecoFilesString} 
-      gcc -shared -o ../libsecoclient.so -fPIC ${compilerFlags} ${clientSecoFilesString} 
-    '';
+  compilerCommands = {
+    client = {
+      main = ''gcc ${clientMainFilesString} ${compilerFlags} -export-dynamic -o ../client;'';
+      seco = ''gcc -shared -o ../libsecoclient.so -fPIC ${compilerFlags} ${clientSecoFilesString}'';
+    };
+    server = {
+      main = ''gcc ${serverMainFilesString} ${compilerFlags} -export-dynamic -o ../server;'';
+      seco = ''# gcc -shared -o ../libsecoserver.so -fPIC ${compilerFlags} ${serverSecoFilesString}'';
+    };
+  };
 
   # No need to touch the rest of this file
 
-  compilingScript = compilerCommand: ''
-    runExe=""
-    while getopts r: opt; do
-      case $opt in
-        r)
-          runExe="$OPTARG"
-          ;;
-        *)
-          break
-          ;;
-      esac
-    done
-    shift $((OPTIND - 1))
+  mainCompilerCommand = with lib;
+    (pipe compilerCommands [
+      attrValues
+      zipAttrs
+      (s: s.main or [])
+      (concatStringsSep "\n")
+    ]);
+  secoCompilerCommand = with lib;
+    (pipe compilerCommands [
+      attrValues
+      zipAttrs
+      (s: s.seco or [])
+      (concatStringsSep "\n")
+    ]);
 
-    export cmdLineCompileFlags
-    cmdLineCompileFlags=("$@")
+  serverCompilerCommand =
+    lib.pipe compilerCommands.server [
+      (lib.mapAttrsToList (n: v: v))
+      (lib.concatStringsSep "\n")
+    ];
+  clientCompilerCommand =
+    lib.pipe compilerCommands.client [
+    (lib.mapAttrsToList (n: v: v))
+    (lib.concatStringsSep "\n")
+  ];
 
-    gccret=$(cd src;
-    ${compilerCommand}
-    echo $?)
-
-    [[ "$gccret" == 0 && -n "$runExe" ]] && eval "$runExe"
-
-    exit "$gccret"
-  '';
-
-  ccseco = pkgs.writeShellApplication {
-    name = "ccseco";
+  compilingScript = name: compilerCommand: pkgs.writeShellApplication {
+    name = "${name}";
     runtimeInputs = [ raylib ];
-    text = compilingScript secoCompilerCommand;
+    text = ''
+      runExe=""
+      while getopts r: opt; do
+        case $opt in
+          r)
+            runExe="$OPTARG"
+            ;;
+          *)
+            break
+            ;;
+        esac
+      done
+      shift $((OPTIND - 1))
+
+      export cmdLineCompileFlags
+      cmdLineCompileFlags=("$@")
+
+      gccret=$(cd src;
+      ${compilerCommand}
+      echo $?)
+
+      [[ "$gccret" == 0 && -n "$runExe" ]] && eval "$runExe"
+
+      exit "$gccret"
+    '';
   };
 
-  ccmain = pkgs.writeShellApplication {
-    name = "ccmain";
-    runtimeInputs = [ raylib ];
-    text = compilingScript mainCompilerCommand;
-  };
+  ccseco = compilingScript "ccseco" secoCompilerCommand;
+  ccmain = compilingScript "ccmain" mainCompilerCommand;
 
-  ccall = pkgs.writeShellApplication {
-    name = "ccmain";
-    runtimeInputs = [ raylib ];
-    text = ccall-text;
-  };
+  ccclient = compilingScript "ccclient" clientCompilerCommand;
+  ccserver = compilingScript "ccserver" serverCompilerCommand;
 
-  ccall-text = compilingScript ''
-    ${secoCompilerCommand}
-    ${mainCompilerCommand}
-  '';
-
-  echo-ccall = pkgs.writeShellScriptBin "echo-ccall" ''
-    cat << 'EOSCRIPT'
-    ${ccall-text}
-    EOSCRIPT
-  '';
+  ccall = compilingScript "ccmain" "${secoCompilerCommand} ${mainCompilerCommand}";
 
   entr-plug-client = pkgs.writeShellApplication {
     name = "entr-plug-client";
-    runtimeInputs = [ pkgs.entr ccmain ccseco ];
-    text = ''trap 'kill 0' INT; ccmain -r "./client" & while sleep 0.1; do find ./src -name '*.c' -or -name '*.h' | entr -cd ccseco; done'';
+    runtimeInputs = [
+      pkgs.entr
+      ccclient
+      ccseco
+    ];
+    text = ''trap 'kill 0' INT; ccclient -r "./client" & while sleep 0.1; do find ./src -name '*.c' -or -name '*.h' | entr -cd ccseco; done'';
   };
-in 
+in
 pkgs.mkShell {
-  inherit 
-    compilerFlags
-    mainCompilerCommand
-    secoCompilerCommand
+  inherit
     serverMainFilesString
     clientMainFilesString
     serverSecoFilesString
-    clientSecoFilesString;
+    clientSecoFilesString
+    compilerFlags
+    mainCompilerCommand
+    secoCompilerCommand
+    ;
 
   buildInputs = [
     raylib
     ccseco
     ccmain
+    ccclient
+    ccserver
     ccall
-    echo-ccall
     entr-plug-client
   ];
 }

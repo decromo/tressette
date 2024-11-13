@@ -12,6 +12,8 @@
     raylib = self.packages.${system}.raylib-static-ext;
     raylib-dev = self.packages.${system}.raylib-dynamic-ext;
 
+    extraCompilerArgs = ''-ggdb'';
+
     commonMainFiles = [
     ];
     clientMainFiles = [
@@ -50,7 +52,9 @@
 
         buildInputs = /* with pkgs; */ [ raylibDrv ];
 
-        buildPhase = ''gcc ${files} ${raylibDrv.compileFlags} ${extraCompilerArgs}'';
+        buildPhase = ''gcc ${extraCompilerArgs} ${files} ${raylibDrv.compileFlags}'';
+
+        dontStrip = (builtins.any (s: (lib.match "^-g.*" s) != null) (lib.splitString " " extraCompilerArgs));
 
         installPhase = ''
           mkdir -p $out/bin
@@ -92,8 +96,8 @@
         EOF
       '';
 
-      client = mkBin { pname = "tressette-client"; files = clientFilesString; };
-      server = mkBin { pname = "tressette-server"; files = serverFilesString; };
+      client = mkBin { pname = "tressette-client"; files = clientFilesString; inherit extraCompilerArgs; };
+      server = mkBin { pname = "tressette-server"; files = serverFilesString; inherit extraCompilerArgs; };
 
       tressette = pkgs.symlinkJoin { name = "tressette"; paths = [ client server ];};
 

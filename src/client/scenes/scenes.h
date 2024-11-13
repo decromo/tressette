@@ -7,9 +7,9 @@
 #include "../../common/common.h"
 
 #define SCENE_VFUNCS \
-    F(scene_connection, void, void) \
-    F(scene_game, void, void)
-
+    F(scene_connection, void, void*) \
+    F(scene_game, void, void*)
+        
 #define F(name, ret, ...) ret name(__VA_ARGS__);
 SCENE_VFUNCS
 #undef F
@@ -23,7 +23,7 @@ enum Scene_tags {
 struct Scene_vtable {
     size_t capacity;
     size_t size;
-    void (*table[])(void);
+    void (*table[])(void*);
 }__attribute__((packed));
 
 static inline void scene_vtable_gen(struct Scene_vtable **t) {
@@ -39,7 +39,5 @@ static inline void scene_vtable_gen(struct Scene_vtable **t) {
     SCENE_VFUNCS
     #undef F
 }
-
-
 
 #endif // SCENES_H

@@ -37,7 +37,7 @@ int sort_card_packets(const void *c1, const void *c2);
 void game_organize_hand(struct llist *hand, int selector_arr[20], bool print);
 void game_print_roundpass(int round, int pass);
 int client_prompt_name(unsigned int maxlen, char *name);
-int client_prompt_move(struct Player *p, enum Suits main_suit);
+int client_prompt_move(struct Player *p);
 void CEV_game_over(struct Game_client *g, struct EV_packet_gameover *evp, char (*names)[4][PLAYERNAME_STRLEN+1], unsigned char (*scores)[4]);
 void CEV_round_over(struct Game_client *g, struct EV_packet_roundover *evp, char (*names)[4][PLAYERNAME_STRLEN+1]);
 void CEV_pass_over(struct Game_client *g, struct EV_packet_passover *evp, char (*names)[4][PLAYERNAME_STRLEN+1]);

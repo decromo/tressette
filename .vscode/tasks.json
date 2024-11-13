@@ -3,25 +3,15 @@
         {
             "type": "cppbuild",
             "label": "Build client",
-            "command": "/run/current-system/sw/bin/gcc",
+            "command": "cat << 'EORUN' | eval",
             "args": [
-                "-fdiagnostics-color=always",
-                "-g",
-                "client.c",
-                "common.c",
-                "network.c",
-                "client_network.c",
-                "utils.c",
-                "threads.c",
-                "-pthread",
-                "-o",
-                "${workspaceFolder}/client"
+                "$clientBuild",
+                "EORUN"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": [
-                "$gcc"
             ],
             "group": {
                 "kind": "build",
@@ -31,25 +21,31 @@
         {
             "type": "cppbuild",
             "label": "Build server",
-            "command": "/run/current-system/sw/bin/gcc",
+            "command": "cat << 'EORUN' | eval",
             "args": [
-                "-fdiagnostics-color=always",
-                "-g",
-                "server.c",
-                "network.c",
-                "server_network.c",
-                "common.c",
-                "utils.c",
-                "threads.c",
-                "-pthread",
-                "-o",
-                "${workspaceFolder}/server"
+                "$serverBuild",
+                "EORUN"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": [
-                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "cppbuild",
+            "label": "Build dev",
+            "command": "./build-all.sh",
+            "args": [
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
             ],
             "group": {
                 "kind": "build",

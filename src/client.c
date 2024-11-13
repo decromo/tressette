@@ -14,7 +14,7 @@
 int main(int argc, char **argv)
 {
     SetConfigFlags(FLAG_WINDOW_TOPMOST | FLAG_WINDOW_HIGHDPI | FLAG_BORDERLESS_WINDOWED_MODE);
-    InitWindow(800, 600, "tressette");
+    InitWindow(1600, 900, "tressette");
     SetTargetFPS(60);
     // SetWindowMonitor(0);
     SetWindowPosition(5000, 0);

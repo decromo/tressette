@@ -143,7 +143,7 @@ void game_organize_hand(struct llist *hand, int selector_arr[20], bool print) {
         if (print == true) printf(__VA_ARGS__);
 
     PRINT(".\t.\t.\t.\t.\t.   Your Hand    .\t.\t.\t.\t.\t.\n\n");
-    PRINT("\tDenara\t\t\tCoppe\t\t\tBastoni\t\t\tSpade\n");
+    PRINT("\tDenari\t\t\tCoppe\t\t\tSpade\t\t\tBastoni\n");
 
     while (memcmp(suits_remaining, "\0\0\0\0", 4) != 0) {
         for (int i_suit = 0; i_suit < 4; i_suit++) {
@@ -200,7 +200,7 @@ int client_prompt_name(unsigned int maxlen, char *name) {
     free(buf);
     return ret;
 }
-int client_prompt_move(struct Player *p, enum Suits main_suit) {
+int client_prompt_move(struct Player *p) {
     int selection = -1;
     char buf_str[8] = { 0 };
     char *end_ptr;
@@ -349,6 +349,7 @@ int client_handle_packets(struct Game_client *g) {
             break;
         case EV_GAME_START:
             printf("Game is starting !!\n");
+            switchScene(TAG_scene_game);
             break;
         case EV_GAME_OVER:
             CEV_game_over(g, (struct EV_packet_gameover *)sp->ev_data, 
@@ -390,9 +391,14 @@ int client_handle_packets(struct Game_client *g) {
             printf("Your last move was invalid, try again.\n");
         case RQ_MOVE:
             game_organize_hand(&g->player.hand, g->hand_selectors, false);
+            // int selectorId = promptMove();
+            int selector_id = client_prompt_move(&g->player);
+            if (selector_id == -1) {
+                break;
+            }
             last_RS_move.round = g->round;
             last_RS_move.pass = g->pass;
-            last_RS_move.card_id = g->hand_selectors[client_prompt_move(&g->player, g->pass_suit)];
+            last_RS_move.card_id = g->hand_selectors[selector_id];
         case RQ_MOVE_AGAIN:
             net_contact_server(g, RS_MOVE, &last_RS_move);
             break;
@@ -435,7 +441,7 @@ bool client_prompt_reconnect(void) {
         switch (answ) {
         case 'Y':
         case 'y':
-            break;
+            return true;
         case 'N':
         case 'n':
             return false;
@@ -470,6 +476,7 @@ int client_main(void *game_raw)
             if (servsock == -1) { goto render; }
 
             game->connection_established = true;
+            game->lost_connection = false;
             client_setup_game(game, servsock);
             game->addrinfo_found = false; // make sure we don't use freed addrinfo
             freeaddrinfo(game->serv_ai);
@@ -490,7 +497,9 @@ int client_main(void *game_raw)
     }
 
     render:
-    render_loop();
+    render_loop(game);
+
+    // div();
 
     if (game->lost_connection && !client_prompt_reconnect()) {
         game->game_aborted = true;

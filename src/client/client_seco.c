@@ -11,6 +11,7 @@
 
 #include <raylib.h>
 
+#include "../common/common.h"
 #include "client_seco.h"
 #include "scenes/scenes.h"
 
@@ -57,13 +58,16 @@ void render_init(void **memPtr) {
     return;
 }
 
-void debugInfoText(double startAngle) {
+void debugInfoText(double what) {
+    static float start = 0;
     // DrawRing( (Vector2){.x = -100, .y = 700}, 400, 550, 0, 360, 1, RAYWHITE);
     DrawText(TextFormat("mouse: %d %d", GetMouseX(), GetMouseY()), 0, 0, 26, GREEN);
-    DrawText(TextFormat("angle: %0.2f", startAngle), 640, 0, 26, GREEN);
+    DrawText(TextFormat("angle: %0.2f", what), 640, start, 26, GREEN);
+    start += 28;
+
 }
 
-void render_loop() {
+void render_loop(void *arg) {
     SetTraceLogLevel(LOG_ERROR);
     BeginDrawing();
     ClearBackground(GetColor(0x18181800));
@@ -74,7 +78,7 @@ void render_loop() {
     float rotPerSec = 0.03;
     double startAngle = fmod(GetTime() * rotPerSec  * 360, 360);
 
-    rMem->scene_vtable->table[rMem->scene]();
+    rMem->scene_vtable->table[rMem->scene](arg);
 
     if (IsKeyPressed(KEY_S)) {
         rMem->scene = (rMem->scene + 1) % 2;
@@ -85,4 +89,9 @@ void render_loop() {
     EndDrawing();
 
     // if (IsTextureReady(rMem->debug_texture)) UnloadTexture(rMem->debug_texture);
+}
+
+void debug_value_add(const char *name, float *val) {
+    // TODO
+
 }

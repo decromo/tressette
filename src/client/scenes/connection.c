@@ -7,56 +7,11 @@
 
 #include <raylib.h>
 
-
 #include "../client_seco.h"
-
-#define SINUSOID_WRONG(amp, freq, phase) \
-        (((float)amp) * sin(RAD2DEG * ((float)freq) * ((float)phase)))
-
-#define SINUSOID(amp, freq, phase) \
-        (((float)amp) * sin(DEG2RAD * ((float)freq) * ((float)phase)))
+#include "scenes.h"
+#include "utils.h"
 
 extern struct Render_memory *rMem;
-
-// Image GenImageGradientLinearGood(int width, int height, int direction, Color start, Color end)
-// {
-//     Color *pixels = (Color *)RL_MALLOC(width*height*sizeof(Color));
-
-//     float radianDirection = (float)(direction*2)/180.f*3.14159f;
-//     float cosDir = cosf(radianDirection);
-//     float sinDir = sinf(radianDirection);
-
-//     float startVal = 0.5 - (cosDir*width/2) - (sinDir*height/2);
-//     float denom = ((signbit(sinDir) != 0) == (signbit(cosDir) != 0))? fabs(startVal) : fabs(startVal+width*cosDir);
-//     for (int i = 0; i < width; i++)
-//     {
-//         for (int j = 0; j < height; j++)
-//         {
-//             // Calculate the relative position of the pixel along the gradient direction
-//             float pos = (startVal + (i*cosDir + j*sinDir)) / denom;
-
-//             float factor = pos;
-//             factor = (factor > 1.0f)? 1.0f : factor;  // Clamp to [-1,1]
-//             factor = (factor < -1.0f)? -1.0f : factor;  // Clamp to [-1,1]
-//             factor = factor / 2 + 0.5f;
-
-//             // Generate the color for this pixel
-//             pixels[j*width + i].r = (int)((float)end.r*factor + (float)start.r*(1.0f - factor));
-//             pixels[j*width + i].g = (int)((float)end.g*factor + (float)start.g*(1.0f - factor));
-//             pixels[j*width + i].b = (int)((float)end.b*factor + (float)start.b*(1.0f - factor));
-//             pixels[j*width + i].a = (int)((float)end.a*factor + (float)start.a*(1.0f - factor));
-//         }
-//     }
-//     Image image = {
-//         .data = pixels,
-//         .width = width,
-//         .height = height,
-//         .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
-//         .mipmaps = 1
-//     };
-
-//     return image;
-// }
 
 void DrawFerrule(Vector2 center, float scale, float angle, Color color)
 {
@@ -73,29 +28,14 @@ void DrawFerrule(Vector2 center, float scale, float angle, Color color)
     DrawRing(center, crownRadii[0] * scale, crownRadii[1] * scale, angle, angle + 360.0 * 4, 21, color);
 }
 
-// Texture2D colored_squares()
-// {
-//     Image squares = GenImageColor(300, 300, WHITE);
-//     Texture2D square_tx = LoadTextureFromImage(squares);
-//     UnloadImage(squares);
-//     DrawTexture(square_tx, 300, 200, Fade(RED, 0.8));
-//     DrawTexture(square_tx, 250, 150, Fade(GREEN, 0.8));
-//     return square_tx;
-// }
-
-void render_image(Image *i) {
-    rMem->debug_texture = LoadTextureFromImage(*i);
-    DrawTexture(rMem->debug_texture, 0, 0, WHITE);
-}
-
 void crowns(double startAngle)
 {
     BeginTextureMode(rMem->crown.mask);
     // ClearBackground(BLANK); // TODO commenting this out has potential..
-    float lsize = 900;
-    float rsize = 400;
-    Vector2 lc = {150, 900},
-            rc = {900, -80};
+    float lsize = 1600;
+    float rsize = 600;
+    Vector2 lc = {0.1875* GetScreenWidth(), 1.5* GetScreenHeight()},
+            rc = {1.125* GetScreenWidth(), -0.125* GetScreenHeight()};
     BeginBlendMode(BLEND_ALPHA_PREMULTIPLY);
     DrawFerrule(lc, lsize+5, startAngle, Fade(BLANK, 0.2));
     DrawFerrule(rc, rsize+5, startAngle, Fade(BLANK, 1));
@@ -104,15 +44,6 @@ void crowns(double startAngle)
     EndBlendMode();
     EndTextureMode();
 }
-// void rotate_single_ferrule(RenderTexture2D *ferrule, double angle)
-// {
-//     BeginTextureMode(*ferrule);
-//     ClearBackground(BLANK);
-//     int dim = ferrule->texture.height/2;
-//     DrawFerrule((Vector2){dim, dim}, dim, angle, WHITE);
-//     DrawFerrule((Vector2){dim, dim}, dim, angle, WHITE);
-//     EndTextureMode();
-// }
 
 void alphablend(double angle)
 {
@@ -131,23 +62,36 @@ void alphablend(double angle)
     // DrawTexture(ghieracool, 100, 0, WHITE);
 }
 
-void scene_connection(void)
+void scene_connection(void* arg)
 {
     float rotPerSec = 0.03;
     double startAngle = fmod(GetTime() * rotPerSec  * 360, 360);
 
+    void fillRecWithAllCards(Rectangle r);
+    float factor = 1.2;
+    float screenW = GetScreenWidth();
+    float screenH = GetScreenHeight();
+    float recW = screenW * factor;
+    float recH = screenH * factor;
+    fillRecWithAllCards((Rectangle){screenW*(1-factor)/2, screenH*(1-factor)/2, recW, recH});
+
     alphablend(startAngle);
-    DrawTextureRec(rMem->crown.res, (Rectangle){0,0,800,-600}, (Vector2){0,0}, WHITE);
+    // DrawTextureRec(rMem->crown.res, (Rectangle){0,0,800,-600}, (Vector2){0,0}, WHITE);
+    DrawTexturePro(
+        rMem->crown.res, 
+        (Rectangle){0, 0, rMem->crown.res.width,-rMem->crown.res.height }, 
+        (Rectangle){0, 0, GetScreenWidth(), GetScreenHeight() }, 
+        (Vector2){0,0}, 0, WHITE);
     // rotate_ferrule(&rMem->ferrule, startAngle);
     // DrawTexturePro(rMem->ferrule.texture, (Rectangle){0,0,600,600}, (Rectangle){400,300,600,600}, (Vector2){300,300}, 0, WHITE);
     // DrawTextureRec(rMem->crown_circs.texture, (Rectangle){0,0,rMem->crown_circs.texture.width,rMem->crown_circs.texture.height}, (Vector2){0,-200}, WHITE);
 
     void loading1(Vector2, float), loading2(Vector2, float), loading3(Vector2, float);
-    loading2((Vector2){135, 533}, 0.2);
+    loading2((Vector2){GetScreenWidth()/6, GetScreenHeight()*8/9}, 0.2);
     // loading1((Vector2){200, 300}, 1);
     // loading3((Vector2){600, 300}, 1);
 
-    DrawText(rMem->statusStr, 175, 510, 26, RAYWHITE);
+    DrawText(rMem->statusStr, GetScreenWidth()*4/20, GetScreenHeight()*8/9 - 24, 26, RAYWHITE);
 
     // float radiusGreen = SINUSOID_WRONG(3, 1/128, startAngle) + 3 + 6;
     // DrawCircleGradient(110, 530, radiusGreen, RAYWHITE, LIME);
@@ -165,6 +109,24 @@ void scene_connection(void)
 }
 
 
+// void rotate_single_ferrule(RenderTexture2D *ferrule, double angle)
+// {
+//     BeginTextureMode(*ferrule);
+//     ClearBackground(BLANK);
+//     int dim = ferrule->texture.height/2;
+//     DrawFerrule((Vector2){dim, dim}, dim, angle, WHITE);
+//     DrawFerrule((Vector2){dim, dim}, dim, angle, WHITE);
+//     EndTextureMode();
+// }
+// Texture2D colored_squares()
+// {
+//     Image squares = GenImageColor(300, 300, WHITE);
+//     Texture2D square_tx = LoadTextureFromImage(squares);
+//     UnloadImage(squares);
+//     DrawTexture(square_tx, 300, 200, Fade(RED, 0.8));
+//     DrawTexture(square_tx, 250, 150, Fade(GREEN, 0.8));
+//     return square_tx;
+// }
 // void wack() {
 //     // RenderTexture2D target = LoadRenderTexture(600, 600);
 //     // BeginTextureMode(target);

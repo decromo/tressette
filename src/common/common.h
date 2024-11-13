@@ -22,10 +22,10 @@ typedef struct llist {
 } llist;
 
 enum Suits {
-    DENARA,
+    DENARI,
     COPPE,
-    BASTONI,
     SPADE,
+    BASTONI,
 };
 
 struct Card_node {

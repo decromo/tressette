@@ -73,17 +73,17 @@ int flush_instream(FILE *stream) {
 char *suit_to_string(enum Suits s) {
     static char string[64] = "null";
     switch (s) {
-    case DENARA:
-        strcpy(string, "Denara");
+    case DENARI:
+        strcpy(string, "Denari");
         break;
     case COPPE:
         strcpy(string, "Coppe");
         break;
-    case BASTONI:
-        strcpy(string, "Bastoni");
-        break;
     case SPADE:
         strcpy(string, "Spade");
+        break;
+    case BASTONI:
+        strcpy(string, "Bastoni");
         break;
     };
     return string;
