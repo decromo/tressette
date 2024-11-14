@@ -21,6 +21,8 @@ struct Game_client {
     int game_scores[4];
     int round_score_thirds[4];
     struct Player player;
+
+    // sad zone start
     int hand_selectors[20];
     struct addrinfo *serv_ai;
     bool addrinfo_found;
@@ -28,6 +30,9 @@ struct Game_client {
     bool lost_connection;
     bool game_over;
     bool game_aborted;
+    int rq_queue_size;
+    enum Request_kind rq_queue[20];
+    int rq_queue_freeIdx;
 };
 
 struct addrinfo *client_addrinfo(char *addr, char *port);
@@ -45,5 +50,7 @@ void CEV_turn_start(struct Game_client *g, struct EV_packet_turnstart *evp, char
 void CEV_played_card(struct Game_client *g, struct EV_packet_playedcard *evp, char (*names)[4][PLAYERNAME_STRLEN+1]);
 void client_apply_state(struct Game_client *g, struct Game_status *s, struct Packet_hand *hand);
 int client_handle_packets(struct Game_client *g);
+int client_handle_requests(struct Game_client *g);
+int client_enqueue_request(enum Request_kind rq, struct Game_client *g);
 
 #endif // CLIENT_H

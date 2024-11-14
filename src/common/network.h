@@ -24,14 +24,14 @@ enum __attribute__((__packed__)) Packet_kind {
     SERVER_PKT, CLIENT_PKT
 };
 enum __attribute__((__packed__)) Request_kind {
-    RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID, RQ_NONE
+    RQ_NONE, RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID
 };
 enum __attribute__((__packed__)) Response_kind {
-    RS_NAME, RS_MOVE, RS_UPDATEME
+    RS_NONE, RS_NAME, RS_MOVE, RS_UPDATEME
 };
 enum __attribute__((__packed__)) Event_kind {
-    EV_WELCOME, EV_GAME_START, EV_GAME_OVER, EV_ROUND_START, EV_ROUND_OVER, EV_PASS_START,
-        EV_PASS_OVER, EV_TURN_START, EV_PLAYED_CARD, EV_NONE
+    EV_NONE, EV_WELCOME, EV_GAME_START, EV_GAME_OVER, EV_ROUND_START, EV_ROUND_OVER, EV_PASS_START,
+        EV_PASS_OVER, EV_TURN_START, EV_PLAYED_CARD
 };
 
 struct Packet_card {
@@ -118,6 +118,7 @@ struct EV_packet_gameover {
 // EV_WELCOME_CLIENT, EV_GAME_START, EV_PASS_START, PLAYED_CARD, EV_PASS_OVER, EV_ROUND_OVER, EV_GAME_OVER, EV_NONE
 static inline pk_size_t event_sizeof(enum Event_kind k) {
     switch (k) {
+    case EV_NONE: return 0;
     case EV_WELCOME: return sizeof(struct EV_packet_welcome);
     case EV_GAME_START: return 0;
     case EV_GAME_OVER: return sizeof(struct EV_packet_gameover);
@@ -127,12 +128,12 @@ static inline pk_size_t event_sizeof(enum Event_kind k) {
     case EV_PASS_OVER: return sizeof(struct EV_packet_passover);
     case EV_TURN_START: return sizeof(struct EV_packet_turnstart);
     case EV_PLAYED_CARD: return sizeof(struct EV_packet_playedcard);
-    case EV_NONE: return 0;
     }
     return -1;
 }
 static inline const char *event_nameof(enum Event_kind k) {
     switch (k) {
+    case EV_NONE: return "noevent";
     case EV_WELCOME: return "welcome";
     case EV_GAME_START: return "gamestart";
     case EV_GAME_OVER: return "gameover";
@@ -142,7 +143,6 @@ static inline const char *event_nameof(enum Event_kind k) {
     case EV_ROUND_OVER: return "roundover";
     case EV_TURN_START: return "turnstart";
     case EV_PLAYED_CARD: return "playedcard";
-    case EV_NONE: return "noevent";
     default: return "event_nameof-ERROR";
     }
 }
@@ -150,13 +150,13 @@ static inline const char *event_nameof(enum Event_kind k) {
 // RQ_NAME, RQ_NAME_AGAIN, RQ_NAME_INVALID, RQ_MOVE, RQ_MOVE_AGAIN, RQ_MOVE_INVALID, RQ_NONE
 static inline const char *request_nameof(enum Request_kind k) {
     switch (k) {
+    case RQ_NONE: return "norequest";
     case RQ_NAME: return "name";
     case RQ_NAME_AGAIN: return "name_again";
     case RQ_NAME_INVALID: return "name_invalid";
     case RQ_MOVE: return "move";
     case RQ_MOVE_AGAIN: return "move_again";
     case RQ_MOVE_INVALID: return "move_invalid";
-    case RQ_NONE: return "norequest";
     default: return "request_nameof-ERROR";
     }
 }
@@ -164,6 +164,7 @@ static inline const char *request_nameof(enum Request_kind k) {
 // RS_NAME, RS_MOVE, RS_UPDATEME
 static inline pk_size_t response_sizeof(enum Response_kind k) {
     switch (k) {
+    case RS_NONE: return 0;
     case RS_NAME: return sizeof(struct RS_packet_name);
     case RS_MOVE: return sizeof(struct RS_packet_move);
     case RS_UPDATEME: return 0;

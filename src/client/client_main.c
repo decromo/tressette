@@ -379,31 +379,10 @@ int client_handle_packets(struct Game_client *g) {
         }
 
         switch (sp->rq_kind) {
-        case RQ_NAME_INVALID:
-        case RQ_NAME:
-            last_RS_name.name_len = client_prompt_name(PLAYERNAME_STRLEN, last_RS_name.name);
-        case RQ_NAME_AGAIN:
-            net_contact_server(g, RS_NAME, &last_RS_name);
-            break;
-
-        case RQ_MOVE_INVALID:
-            game_organize_hand(&g->player.hand, g->hand_selectors, true);
-            printf("Your last move was invalid, try again.\n");
-        case RQ_MOVE:
-            game_organize_hand(&g->player.hand, g->hand_selectors, false);
-            // int selectorId = promptMove();
-            int selector_id = client_prompt_move(&g->player);
-            if (selector_id == -1) {
-                break;
-            }
-            last_RS_move.round = g->round;
-            last_RS_move.pass = g->pass;
-            last_RS_move.card_id = g->hand_selectors[selector_id];
-        case RQ_MOVE_AGAIN:
-            net_contact_server(g, RS_MOVE, &last_RS_move);
-            break;
-
         case RQ_NONE:
+            break;
+        default:
+            assert(client_enqueue_request(sp->rq_kind, g) == 0);
             break;
         }
 
@@ -411,6 +390,73 @@ int client_handle_packets(struct Game_client *g) {
 
     free(packet);
     return is_game_over;
+}
+int client_enqueue_request(enum Request_kind rq, struct Game_client *g) {
+    if (g->rq_queue_size >= 20) return 1;
+
+    g->rq_queue[g->rq_queue_freeIdx] = rq;
+    g->rq_queue_size++;
+    for (int i = 0; i < 20; i++) {
+        if (g->rq_queue[i] == RQ_NONE)  {
+            g->rq_queue_freeIdx = i;
+            break;
+        }
+    }
+    return 0;
+}
+int client_handle_requests(struct Game_client *g) {
+
+    // for (int i = g->rq_queue_size - 1; i >= 0; i--) {
+
+    // }
+    int seen = 0;
+    int handled = 0;
+    int ret = 0;
+    for (int i = 19; seen < g->rq_queue_size && i >= 0; i--) { // FIXME
+        if (g->rq_queue[i] == RQ_NONE) continue;
+
+        #define RQ_HANDLED \
+            { \
+                handled++; \
+                g->rq_queue[i] = RQ_NONE; \
+                g->rq_queue_freeIdx = i; \
+            }
+
+        seen++;
+        switch (g->rq_queue[i]) {
+        case RQ_NONE:
+            break;
+
+        case RQ_NAME_INVALID:
+        case RQ_NAME:
+            ret = client_prompt_name(PLAYERNAME_STRLEN, last_RS_name.name);
+            if (ret == -1) break;
+            last_RS_name.name_len = ret;
+        case RQ_NAME_AGAIN:
+            net_contact_server(g, RS_NAME, &last_RS_name);
+            RQ_HANDLED
+            break;
+
+        case RQ_MOVE_INVALID:
+            printf("Your last move was invalid, try again.\n");
+        case RQ_MOVE:
+            ret = scene_game_selectCard(&g->player);
+            if (ret == -1) break;
+            last_RS_move.round = g->round;
+            last_RS_move.pass = g->pass;
+            last_RS_move.card_id = ret;
+        case RQ_MOVE_AGAIN:
+            net_contact_server(g, RS_MOVE, &last_RS_move);
+            RQ_HANDLED
+            break;
+        }
+        i--;
+    }
+    #undef RQ_HANDLED
+
+    g->rq_queue_size -= handled;
+
+    return 0;
 }
 
 bool client_prompt_endgame(void) {
@@ -498,6 +544,8 @@ int client_main(void *game_raw)
 
     render:
     render_loop(game);
+
+    client_handle_requests(game);
 
     // div();
 
