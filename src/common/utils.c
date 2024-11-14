@@ -5,155 +5,62 @@
 #include "common.h"
 #include "raylib.h"
 
-void llist_add(void *list, void *node) {
-    llist *ll = list;
-    llist_node *n = node;
-    assert(ll != NULL && n != NULL);
+void arr_remove_shift(size_t arr_size, void *arr_raw, size_t elem_size, int index) {
+    // char (*arr)[elem_size];
 
-    if (ll->head == NULL) ll->head = (llist_node *)ll;
-    if (ll->tail == NULL) ll->tail = (llist_node *)ll;
-
-    n->next = ll->head;
-    ll->head->prev = n;
-    n->prev = (llist_node *)ll;
-    ll->head = n;
-
-    ll->size++;
-}
-void llist_append(void *list, void *node) {
-    llist *ll = list;
-    llist_node *n = node;
-    assert(ll != NULL && n != NULL);
-
-    if (ll->head == NULL) ll->head = (llist_node *)ll;
-    if (ll->tail == NULL) ll->tail = (llist_node *)ll;
-
-    n->next = (llist_node *)ll;
-    n->prev = ll->tail;
-    ll->tail->next = n;
-    ll->tail = n;
-
-    ll->size++;
-}
-// this DOES NOT free the node pointer! (if it's not the list node)
-void llist_pop(void *list) {
-    assert(list != NULL);
-    llist *ll = list;
-    llist_node *n = ll->head;
-    assert(n != NULL);
-
-    assert(ll->size >= 0);
-    if (ll->size == 0 || list == n) return;
-
-    if (n->next != NULL) {
-        n->next->prev = n->prev;
-    }
-    if (n->prev != NULL) {
-        n->prev->next = n->next;
-    }
-    
-    free(n);
-    ll->size--;
-
-}
-// this frees the node pointer! (if it's not the list node)
-void llist_remove(void *list, void *node) {
-    assert(list != NULL && node != NULL);
-
-    llist *ll = list;
-    llist_node *n = node;
-
-    assert(ll->size >= 0);
-    if (ll->size == 0 || list == n) return;
-
-    if (n->next != NULL) {
-        n->next->prev = n->prev;
-    }
-    if (n->prev != NULL) {
-        n->prev->next = n->next;
-    }
-    free(n);
-    ll->size--;
+    assert(index < arr_size);
+    memmove(arr_raw + (index*elem_size), arr_raw + ((index+1)*elem_size), elem_size * (arr_size-index-1));
 }
 
-void llist_nuke(void *list, void (fun)(void *node)) {
-    llist *ll = list;
-    llist_node *n;
 
-    for (int i = 0; i < ll->size; i++) {
-        n = ll->head;
-        assert(n != NULL);
-        if (fun != NULL) {
-            fun(n);
-        }
-        llist_remove(ll, n);
-    }
-    // just to be sure
-    ll->head = (llist_node *)ll;
-    ll->tail = (llist_node *)ll;
-    ll->size = 0;
-}
-
-// make sure the list is empty, otherwise the data of its nodes will leak
-void llist_init(void *list) {
-    assert(list != NULL);
-
-    llist_nuke(list, NULL);
-    llist *ll = list;
-
-    ll->head = (llist_node *)ll;
-    ll->tail = (llist_node *)ll;
-    ll->size = 0;
-}
-
-void dynarray_append(void **arr_raw, size_t elem_size, void *elem) {
+void dynarray_append(void **da_raw, size_t elem_size, void *elem) {
     struct dynarray {
         size_t capacity;
         size_t size;
         char data[];
     }__attribute__((packed));
-    struct dynarray *arr = *arr_raw;
+    struct dynarray *da = *da_raw;
 
     // Expand the array size if needed with realloc
-    if (arr->capacity == arr->size) {
-        size_t new_capacity = arr->capacity*1.5 + 1;
-        void *res = realloc(*arr_raw, sizeof(*arr) + elem_size*new_capacity);
+    if (da->capacity == da->size) {
+        size_t new_capacity = da->capacity*1.5 + 1;
+        void *res = realloc(*da_raw, sizeof(*da) + elem_size*new_capacity);
         if (res == NULL) {
             TraceLog(LOG_FATAL, "Could not realloc dynamic array");
             exit(1);
         }
-        *arr_raw = arr = res;
-        arr->capacity = new_capacity;
+        *da_raw = da = res;
+        da->capacity = new_capacity;
     }
 
     // Copy new element over
-    memcpy(&arr->data[arr->size*elem_size], elem, elem_size);
+    memcpy(&da->data[da->size*elem_size], elem, elem_size);
 }
-void dynarray_insert(void **arr_raw, size_t elem_size, size_t index, void *elem) {
+void dynarray_insert(void **da_raw, size_t elem_size, size_t index, void *elem) {
     struct dynarray {
         size_t capacity;
         size_t size;
         char data[];
     }__attribute__((packed));
 
-    assert(arr_raw != NULL);
-    assert(*arr_raw != NULL);
-    struct dynarray *arr = *arr_raw;
+    assert(da_raw != NULL);
+    assert(*da_raw != NULL);
+    struct dynarray *da = *da_raw;
 
     // Expand the array size if needed with realloc
-    if (index >= arr->capacity) {
+    if (index >= da->capacity) {
         size_t new_capacity = index + 1;
-        void *res = realloc(*arr_raw, sizeof(*arr) + elem_size*new_capacity);
+        void *res = realloc(*da_raw, sizeof(*da) + elem_size*new_capacity);
         if (res == NULL) {
             TraceLog(LOG_FATAL, "Could not realloc dynamic array");
             exit(1);
         }
-        *arr_raw = arr = res;
-        arr->capacity = new_capacity;
+        *da_raw = da = res;
+        da->capacity = new_capacity;
     }
 
     // Copy new element in desired index
-    memcpy(&arr->data[elem_size*index], elem, elem_size);
+    memcpy(&da->data[elem_size*index], elem, elem_size);
 }
 
 // inserts newline ('\n') characters, without splitting words if possible.

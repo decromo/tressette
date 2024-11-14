@@ -100,7 +100,7 @@ let
   ccclient = compilingScript "ccclient" clientCompilerCommand;
   ccserver = compilingScript "ccserver" serverCompilerCommand;
 
-  ccall = compilingScript "ccmain" "${secoCompilerCommand} ${mainCompilerCommand}";
+  ccall = compilingScript "ccall" "${secoCompilerCommand} ${mainCompilerCommand}";
 
   entr-plug-client = pkgs.writeShellApplication {
     name = "entr-plug-client";
@@ -109,7 +109,10 @@ let
       ccclient
       ccseco
     ];
-    text = ''trap 'kill 0' INT; ccclient -r "./client" & while sleep 0.1; do find ./src -name '*.c' -or -name '*.h' | entr -cd ccseco; done'';
+    text = ''
+      trap 'kill 0' INT;
+      while getopts r opt; do case $opt in r) run="./client";; *) break;; esac; done;
+      ccclient ''${run:+-r "$run"} && while sleep 0.1; do find ./src -name '*.c' -or -name '*.h' | entr -cd ccseco; done'';
   };
 in
 pkgs.mkShell {
@@ -121,6 +124,8 @@ pkgs.mkShell {
     compilerFlags
     mainCompilerCommand
     secoCompilerCommand
+    clientCompilerCommand
+    serverCompilerCommand
     ;
 
   buildInputs = [

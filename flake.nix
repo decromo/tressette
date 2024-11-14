@@ -10,11 +10,13 @@
     system = "x86_64-linux";
 
     raylib = self.packages.${system}.raylib-static-ext;
-    raylib-dev = self.packages.${system}.raylib-dynamic-ext;
+    raylib-shell = self.packages.${system}.raylib-dynamic-ext;
 
     extraCompilerArgs = ''-ggdb'';
 
     commonMainFiles = [
+      "common/network.c"
+      "common/threads.c"
     ];
     clientMainFiles = [
       "client.c"
@@ -26,9 +28,7 @@
     ];
     commonSecoFiles = [
       "common/utils.c"
-      "common/network.c"
       "common/common.c"
-      "common/threads.c"
     ];
     serverSecoFiles = [
       # "seco_server.c"
@@ -97,6 +97,9 @@
       '';
 
       client = mkBin { pname = "tressette-client"; files = clientFilesString; inherit extraCompilerArgs; };
+      client-cli = mkBin { 
+        pname = "tressette-client"; files = clientFilesString; 
+        extraCompilerArgs = extraCompilerArgs + " -DDEV_CLI "; };
       server = mkBin { pname = "tressette-server"; files = serverFilesString; inherit extraCompilerArgs; };
 
       tressette = pkgs.symlinkJoin { name = "tressette"; paths = [ client server ];};
@@ -105,7 +108,7 @@
     };
 
     devShells.${system}.default = import ./shell.nix { 
-      raylib = raylib-dev;
+      raylib = raylib-shell;
       inherit pkgs sourceFiles;
     };
 

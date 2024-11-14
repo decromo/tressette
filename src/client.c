@@ -17,7 +17,7 @@ int main(int argc, char **argv)
     InitWindow(1600, 900, "tressette");
     SetTargetFPS(60);
     // SetWindowMonitor(0);
-    SetWindowPosition(5000, 0);
+    // SetWindowPosition(5000, 0);
 
     while (!WindowShouldClose()) {
         int ret;

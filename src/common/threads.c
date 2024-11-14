@@ -78,6 +78,7 @@ pthread_t thread_recv_init(struct PQueue *pk_q, int sockfd) {
     llist_init(&pk_q->queue);
 
     pk_q->lock = (pthread_mutex_t)PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP;
+    // pthread_mutex_init(&pk_q->lock, NULL);
 
     pk_q->socket = sockfd;
 

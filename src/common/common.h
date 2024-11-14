@@ -10,16 +10,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-typedef struct llist_node {
-    struct llist_node *next;
-    struct llist_node *prev;
-} llist_node;
-
-typedef struct llist {
-    struct llist_node *head;
-    struct llist_node *tail;
-    int size;
-} llist;
+#include "llist.h"
 
 enum Suits {
     DENARI,
@@ -72,11 +63,7 @@ int fd_unset_nonblocking(int fd, int *flags_ptr);
 int fd_set_nonblocking(int fd, int *flags_ptr);
 int flush_instream(FILE *stream);
 
-void llist_add(void *list, void *node);
-void llist_append(void *list, void *node);
-void llist_remove(void *list, void *node);
-void llist_init(void *list);
-void llist_nuke(void *list, void (fun)(void *node));
+void arr_remove_shift(size_t arr_size, void *arr_raw, size_t elem_size, int index);
 
 void dynarray_append(void **arr_ptr, size_t elem_size, void *elem);
 void dynarray_insert(void **arr_ptr, size_t elem_size, size_t index, void *elem);

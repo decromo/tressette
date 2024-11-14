@@ -100,6 +100,11 @@ bool net_handle_disconnections(struct Game_serv *g) {
                 g, (int[]) { g->players[found_id].id }, 
                 1, RQ_NONE, EV_WELCOME, 
                 &(struct EV_packet_welcome) { .id = g->players[found_id].id });
+            // TMP
+            net_notify_clients(
+                g, (int[]) { g->players[found_id].id }, 
+                1, RQ_NONE, EV_GAME_START, 
+                &(struct EV_packet_welcome) { .id = g->players[found_id].id });
 
             if (g->disconnected_player_count <= 0) 
                 break;

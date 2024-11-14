@@ -31,9 +31,9 @@
             "name": "Debug client",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceRoot}/result/bin/tressette-client",
+            "program": "${workspaceRoot}/client",
             "args": [],
-            "stopAtEntry": false,
+            "stopAtEntry": true,
             "cwd": "${workspaceRoot}",
             "environment": [],
             "externalConsole": false,
@@ -45,6 +45,10 @@
                     "ignoreFailures": true
                 },
                 {
+                    "text": "-d src",
+                    "ignoreFailures": true
+                },
+                {
                     "description": "Set Disassembly Flavor to Intel",
                     "text": "-gdb-set disassembly-flavor intel",
                     "ignoreFailures": true
@@ -52,6 +56,7 @@
             ],
             "preLaunchTask": "Build client",
             "miDebuggerPath": "/run/current-system/sw/bin/gdb"
+
         }
     ]
 }

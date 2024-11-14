@@ -22,7 +22,9 @@ struct Render_memory {
     enum Scene_tags scene;
     struct Scene_vtable *scene_vtable;
 
-    Texture2D cards[40];
+    Texture2D cards;
+
+    bool have_to_move;
 
     // Texture asd;
     Texture2D debug_texture;
@@ -45,14 +47,14 @@ static inline void memInit() {
 
     m->scene = TAG_scene_connection;
 
-    for (int i = 0; i < 40; i++) {
-        m->cards[i] = LoadTexture(TextFormat("./assets/%02d_%s.png", (i % 10) + 1, suit_to_string(i/10)));
-    }
+    m->cards = LoadTexture("./assets/half.png");
 }
 
 static inline void switchScene(enum Scene_tags s) {
     rMem->scene = s;
 }
+
+int scene_game_selectCard(void *arg);
 
 
 #endif // CLIENT_SECO_H
