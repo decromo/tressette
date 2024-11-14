@@ -8,7 +8,7 @@
 
 extern struct Render_memory *rMem;
 
-void debugInfoText(double what);
+void debugInfoText(const char *what, double val);
 
 #define SINUSOID_WRONG(amp, freq, phase) \
         (((float)amp) * sin(RAD2DEG * ((float)freq) * ((float)phase)))

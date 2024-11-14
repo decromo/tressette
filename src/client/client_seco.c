@@ -58,13 +58,12 @@ void render_init(void **memPtr) {
     return;
 }
 
-void debugInfoText(double what) {
+void debugInfoText(const char *what, double value) {
     static float start = 0;
     // DrawRing( (Vector2){.x = -100, .y = 700}, 400, 550, 0, 360, 1, RAYWHITE);
     DrawText(TextFormat("mouse: %d %d", GetMouseX(), GetMouseY()), 0, 0, 26, GREEN);
-    DrawText(TextFormat("angle: %0.2f", what), 640, start, 26, GREEN);
+    DrawText(TextFormat("%s: %0.2f", what, value), 640, start, 26, GREEN);
     start += 28;
-
 }
 
 void render_loop(void *arg) {
@@ -84,7 +83,7 @@ void render_loop(void *arg) {
         rMem->scene = (rMem->scene + 1) % 2;
     }
 
-    debugInfoText(startAngle);
+    debugInfoText("angle", startAngle);
 
     EndDrawing();
 
