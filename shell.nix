@@ -17,22 +17,22 @@ let
     clientSecoFilesString
     ;
 
-  compilerFlags = lib.concatStringsSep " " [
+  commonCompilerFlags = lib.concatStringsSep " " [
     raylib.compileFlags
     extraCompilerArgs
     "-DPLUG_DEV -g -Wall"
-    ''-DPLUG_FILE="\"./libsecoclient.so\""''
+    ''''
     ''"''${cmdLineCompileFlags[@]}"''
   ];
 
   compilerCommands = {
     client = {
-      main = ''gcc ${clientMainFilesString} ${compilerFlags} -export-dynamic -o ../client;'';
-      seco = ''gcc -shared -o ../libsecoclient.so -fPIC ${compilerFlags} ${clientSecoFilesString}'';
+      main = ''gcc ${clientMainFilesString} ${commonCompilerFlags} -DPLUG_FILE="\"./libsecoclient.so\"" -export-dynamic -o ../client;'';
+      seco = ''gcc -shared -o ../libsecoclient.so -fPIC ${commonCompilerFlags} -DPLUG_FILE=\""./libsecoclient.so\"" ${clientSecoFilesString};'';
     };
     server = {
-      main = ''gcc ${serverMainFilesString} ${compilerFlags} -export-dynamic -o ../server;'';
-      seco = ''# gcc -shared -o ../libsecoserver.so -fPIC ${compilerFlags} ${serverSecoFilesString}'';
+      main = ''gcc ${serverMainFilesString} ${commonCompilerFlags} -export-dynamic -o ../server;'';
+      # seco = ''gcc -shared -o ../libsecoserver.so -fPIC ${commonCompilerFlags} -DPLUG_FILE="\"./libsecoserver.so\"" ${serverSecoFilesString};'';
     };
   };
 
@@ -64,9 +64,10 @@ let
     (lib.concatStringsSep "\n")
   ];
 
-  compilingScript = name: compilerCommand: pkgs.writeShellApplication {
-    name = "${name}";
+  compilingScript = exeName: compilerCommand: pkgs.writeShellApplication rec {
+    name = "${exeName}";
     runtimeInputs = [ raylib ];
+    passthru.text = text;
     text = ''
       runExe=""
       while getopts r: opt; do
@@ -84,9 +85,16 @@ let
       export cmdLineCompileFlags
       cmdLineCompileFlags=("$@")
 
-      gccret=$(cd src;
-      ${compilerCommand}
-      echo $?)
+      gccret=$(cd src; ret="0"
+      # shellcheck disable=SC2291
+      while IFS= read -r cmd; do
+        eval "$cmd"
+        ret=$(( ret + $? ))
+      done < <(cat << 'EOPART' 
+      ${compilerCommand} 
+      EOPART
+      )
+      echo $ret)
 
       [[ "$gccret" == 0 && -n "$runExe" ]] && eval "$runExe"
 
@@ -100,7 +108,7 @@ let
   ccclient = compilingScript "ccclient" clientCompilerCommand;
   ccserver = compilingScript "ccserver" serverCompilerCommand;
 
-  ccall = compilingScript "ccall" "${secoCompilerCommand} ${mainCompilerCommand}";
+  ccall = compilingScript "ccall" (lib.concatStringsSep "\n" [ secoCompilerCommand mainCompilerCommand ]);
 
   entr-plug-client = pkgs.writeShellApplication {
     name = "entr-plug-client";
@@ -121,7 +129,7 @@ pkgs.mkShell {
     clientMainFilesString
     serverSecoFilesString
     clientSecoFilesString
-    compilerFlags
+    commonCompilerFlags
     mainCompilerCommand
     secoCompilerCommand
     clientCompilerCommand
@@ -137,4 +145,10 @@ pkgs.mkShell {
     ccall
     entr-plug-client
   ];
+
+  shellHook = ''
+    cat << 'EOHOOK' > build-all.sh
+    ${ccall.text}
+    EOHOOK
+  '';
 }
