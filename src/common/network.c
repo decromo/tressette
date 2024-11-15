@@ -66,7 +66,9 @@ int net_send_packet(int sock, struct Packet *packet) {
     while (sent != PACKET_SIZE) {
         res = send(sock, &buf[sent], PACKET_SIZE - sent, 0);
         if (res == -1) {
-            if (errno != EBADF) perror("send");
+            /* if (errno != EBADF)  */
+            perror("ERRO: send");
+            fprintf(stderr, "TRAC: sock=%d\n", sock);
             return -1;
         }
         sent += res;

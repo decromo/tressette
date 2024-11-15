@@ -29,7 +29,7 @@ int net_contact_server(struct Game_client *g, enum Response_kind rs_k, void *rs_
         memcpy(cp->rs_data, rs_args, cp->rs_size);
     }
     
-    errors += net_send_packet(g->player.netinfo.pk_queue.socket, &packet);
+    errors -= net_send_packet(g->player.netinfo.pk_queue.socket, &packet);
     
-    return errors;
+    return (errors != 0) ? -1 : 0;
 }

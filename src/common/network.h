@@ -168,8 +168,8 @@ static inline pk_size_t response_sizeof(enum Response_kind k) {
     case RS_NAME: return sizeof(struct RS_packet_name);
     case RS_MOVE: return sizeof(struct RS_packet_move);
     case RS_UPDATEME: return 0;
-    default: return -1;
     }
+    return -1;
 }
 
 struct PQueue;

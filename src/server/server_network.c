@@ -15,7 +15,7 @@
 #include "../common/common.h"
 #include "../common/network.h"
 #include "../common/threads.h"
-#include "server.h"
+#include "../server.h"
 #include "server_network.h"
 
 // this function needs to get initialized once by calling it with a pointer to the Game_serv struct (will always return 0 from an initialization call);
@@ -26,7 +26,10 @@ int net_detect_disconnections(void *arg) {
         g = arg;
         return 0;
     }
-    if (g == NULL) return -1;
+    if (g == NULL) {
+        fprintf(stderr, "ERRO: callled net_detect_disconnections improperly or without initialization\n");
+        return -1;
+    }
 
     g->disconnected_player_count = 0;
     for (int i = 0; i < g->player_count; i++) {
@@ -94,6 +97,7 @@ bool net_handle_disconnections(struct Game_serv *g) {
 
             g->disconnected_players[found_id] = NULL;
             g->disconnected_player_count--;
+            g->players[found_id].netinfo.pk_queue.closed = false;
 
             thread_recv_init(&g->players[found_id].netinfo.pk_queue, res);
             net_notify_clients(
@@ -124,6 +128,7 @@ bool net_handle_disconnections(struct Game_serv *g) {
         switch (answ) {
         case 'c':
             fd_unset_nonblocking(fileno(stdin), &stdin_fd_flags);
+            fprintf(stderr, "FATL: Aborting game as per user input\n");
             return false;
         default:
             printf("\nERRO: Invalid answer (cancel game with 'c') ");
@@ -192,6 +197,7 @@ int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
     for (int i = 0; i < n_whom; i++) {
         struct Player *p = &g->players[whom[i]];
         packets[i] = net_serv_forge_packet(g, p);
+
         isp = (struct Server_packet *)packets[i]->data;
         isp->rq_kind = rq_kind;
         isp->ev_kind = ev_kind;
@@ -210,13 +216,18 @@ int net_notify_clients(struct Game_serv *g, int whom[1], int n_whom,
         }
         printf(" packet to %d:%s\n", p->id, p->name);
 
-        errors += net_send_packet(sock, packets[i]);
+        errors -= net_send_packet(sock, packets[i]);
     }
 
     for (int i = 0; i < n_whom; i++) {
         free(packets[i]);
     }
-    return errors;
+
+    if (errors != 0) {
+        fprintf(stderr, "ERRO: send errors in notify_clients\n");
+        return -1;
+    }
+    return 0;
 }
 
 // TODO: timeout?

@@ -13,10 +13,10 @@
 #include "llist.h"
 
 enum Suits {
-    DENARI,
-    COPPE,
-    SPADE,
-    BASTONI,
+    DENARI  = 0,
+    COPPE   = 1,
+    BASTONI = 2,
+    SPADE   = 3,
 };
 
 struct Card_node {

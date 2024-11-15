@@ -1,10 +1,10 @@
 #ifndef SERVER_H
 #define SERVER_H
 
-#include "../common/platform.h"
-
 #include <stdbool.h>
-#include "../common/common.h"
+
+#include "common/common.h"
+#include "common/platform.h"
 
 struct Game_serv {
     /* const */ int listen_sock;
@@ -28,7 +28,7 @@ int serv_setup_game(struct Game_serv *g, int listen_sock);
 int serv_listen(char *port);
 int main(int argc, char **argv);
 void give_cards(struct Player ps[2], int n_pl, struct Card *deck);
-int serv_simulate_turn(struct Game_serv *g, struct Player *turn_player);
+struct Card *serv_simulate_turn(struct Game_serv *g, struct Player *turn_player);
 int serv_simulate_pass(struct Game_serv *g, bool is_last_pass);
 int select_pass_winner(struct Card **thrown, int n_thrown, int pass_master_idx);
 int serv_simulate_round(struct Game_serv *g);

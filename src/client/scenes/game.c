@@ -71,20 +71,19 @@ static void fillRecWithSomeCards(Rectangle r, int n_cards, int rows)
     int atlasCardW = rMem->cards.width/10;
     int atlasCardH = rMem->cards.height/4;
 
-    Rectangle cardRenderRec;
+    int cardX, cardY;
     for (int i = 0; i < n_cards; i++) {
-        cardOrigins[i] = (Vector2){
-            cardWidth/2,
-            r.height/(2*rows)},
+        cardOrigins[i].x = cardX = r.x + i%cols * (r.width-cardWidth)/(cols-1);
+        cardOrigins[i].y = cardY = r.y + i/cols * r.height/rows;
 
         DrawTexturePro(
             rMem->cards,
             (Rectangle){ atlasCardW*cardArr[i].value, atlasCardH*cardArr[i].suit, atlasCardW, atlasCardH},
             (Rectangle){
-                .x = cardWidth/2 + r.x + i%cols * (r.width-cardWidth)/(cols-1),
-                .y = r.height/(2*rows) + r.y + i/cols * r.height/rows,
+                .x = cardWidth/2 + cardX,
+                .y = r.height/(2*rows) + cardY,
                 cardHitbox.width, cardHitbox.height},
-            cardOrigins[i],
+            (Vector2){cardHitbox.width/2,cardHitbox.height/2},
             CheckCollisionPointRec(
                 GetMousePosition(),
                 (Rectangle){
@@ -95,11 +94,11 @@ static void fillRecWithSomeCards(Rectangle r, int n_cards, int rows)
     }
 }
 
-int scene_game_selectCard(void *arg) {
+int scene_game_selectCard(void *arg)
+{
     struct Game_client *g = arg;
 
-        Vector2 pos = GetMousePosition();
-        printf("click: %d, %d\n", pos.x, pos.y);
+    Vector2 pos = GetMousePosition();
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         for (int i = 0; i < g->player.hand.size; i++) {
             if (true == CheckCollisionPointRec(pos,

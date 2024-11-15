@@ -1,7 +1,7 @@
 #ifndef SERVER_NETWORK_H
 #define SERVER_NETWORK_H
 
-#include "server.h"
+#include "../server.h"
 #include "../common/network.h"
 
 int net_detect_disconnections(void *arg);

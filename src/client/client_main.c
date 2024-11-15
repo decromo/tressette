@@ -411,15 +411,19 @@ int client_handle_requests(struct Game_client *g) {
     // }
     int seen = 0;
     int handled = 0;
+    int first_free = -1;
     int ret = 0;
-    for (int i = 19; seen < g->rq_queue_size && i >= 0; i--) { // FIXME
-        if (g->rq_queue[i] == RQ_NONE) continue;
+    for (int i = 0; seen < g->rq_queue_size && i < 20; i--) { // FIXME
+        if (g->rq_queue[i] == RQ_NONE) {
+            if (first_free == -1) first_free = i;
+            continue;
+        }
 
-        #define RQ_HANDLED \
+        #define REQUEST_HANLED \
             { \
                 handled++; \
                 g->rq_queue[i] = RQ_NONE; \
-                g->rq_queue_freeIdx = i; \
+                if (first_free == -1) first_free = i; \
             }
 
         seen++;
@@ -434,27 +438,28 @@ int client_handle_requests(struct Game_client *g) {
             last_RS_name.name_len = ret;
         case RQ_NAME_AGAIN:
             net_contact_server(g, RS_NAME, &last_RS_name);
-            RQ_HANDLED
+            REQUEST_HANLED
             break;
 
         case RQ_MOVE_INVALID:
             printf("Your last move was invalid, try again.\n");
         case RQ_MOVE:
-            ret = scene_game_selectCard(&g->player);
+            ret = scene_game_selectCard(g);
             if (ret == -1) break;
             last_RS_move.round = g->round;
             last_RS_move.pass = g->pass;
             last_RS_move.card_id = ret;
         case RQ_MOVE_AGAIN:
             net_contact_server(g, RS_MOVE, &last_RS_move);
-            RQ_HANDLED
+            REQUEST_HANLED
             break;
         }
         i--;
     }
-    #undef RQ_HANDLED
+    #undef REQUEST_HANLED
 
     g->rq_queue_size -= handled;
+    if (first_free != -1) g->rq_queue_freeIdx = first_free;
 
     return 0;
 }

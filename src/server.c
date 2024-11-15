@@ -1,5 +1,3 @@
-
-
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +11,7 @@
 
 #include "common/platform.h"
 
-#include "server/server.h"
+#include "server.h"
 #include "server/server_network.h"
 
 #include "common/common.h"
@@ -95,11 +93,15 @@ int serv_setup_game(struct Game_serv *g, int listen_sock) {
         errors += net_notify_clients(g, (int[]) { p->id }, 1, RQ_NAME, EV_WELCOME, &(struct EV_packet_welcome) { .id = p->id });
     }
 
-    if (errors < 0) return -1;
+    if (errors < 0) {
+        printf("FATL: errors during setup\n");
+        return -1;
+    }
 
     for (int i = 0; i < n_players; i++) {
         struct Player *p = &g->players[i];
         if (-1 == serv_get_playername(g, p, PLAYERNAME_STRLEN + 1)) {
+            printf("NOTE: propagated error in setup_game\n");
             return -1;
         }
     }
@@ -188,7 +190,10 @@ int main(int argc, char **argv) {
             break;
 
         res = net_notify_clients(&game, NULL, 0, RQ_NONE, EV_GAME_START, NULL);
-        if (res == -1) return -1; // game needs to be terminated due to disconnections
+        if (res == -1) {
+            printf("NOTE: notify failure in main loop\n");
+            return -1; // game needs to be terminated due to disconnections
+        }
 
         while (is_game_over_serv(game.players, game.player_count, game.target_score) == false) {
             give_cards(game.players, game.player_count, game.deck);
@@ -237,7 +242,7 @@ void give_cards(struct Player ps[2], int n_pl, struct Card *deck) {
         }
     }
 }
-int serv_simulate_turn(struct Game_serv *g, struct Player *turn_player) {
+struct Card *serv_simulate_turn(struct Game_serv *g, struct Player *turn_player) {
     assert(turn_player != NULL);
     int res = 0;
     struct Card_node *turn_card = NULL;
@@ -247,38 +252,28 @@ int serv_simulate_turn(struct Game_serv *g, struct Player *turn_player) {
         NULL, 0,
         RQ_NONE, 
         EV_TURN_START, &(struct EV_packet_turnstart) {.who = turn_player->id});
-    if (res == -1) return -1; // game needs to be terminated due to disconnections
+    if (res == -1) { // game needs to be terminated due to disconnections
+        printf("NOTE: notify failure in simulate_turn\n");
+        return NULL; 
+    }
 
+    // get action from player
     turn_card = serv_get_playermove(g, turn_player, g->round, g->pass);
-
-    // lost connection
-    if (turn_card == NULL) {
-        return -1;
+    if (turn_card == NULL) { // game needs to be terminated due to disconnections
+        printf("NOTE: propagated error in simulate_turn\n");
+        return NULL;
     }
 
-    printf("NOTE: %d:%s played %d of %s:%d\n",
-        turn_player->id, turn_player->name,
-        turn_card->c->value + 1, suit_to_string(turn_card->c->suit), turn_card->c->value);
-
-    // set the first card thrown as the main suit
-    if (g->turn_counter == 0) {
-        g->pass_suit = turn_card->c->suit;
-    }
-
-    // record played card
-    g->pass_cards[turn_player->id] = turn_card->c;
-
-    // let players know about the played card
-    struct Packet_card pc = { .suit = turn_card->c->suit, .val = turn_card->c->value };
-    res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PLAYED_CARD,
-                        &(struct EV_packet_playedcard){.whose = turn_player->id, .card = pc});
-    if (res == -1) return -1; // game needs to be terminated due to disconnections
-
+    struct Card *ret = turn_card->c;
     // remove played card from player's hand
     llist_remove(&turn_player->hand, turn_card);
     turn_player->card_count -= 1;
 
-    return 0;
+    printf("NOTE: %d:%s played %d of %s:%d\n",
+        turn_player->id, turn_player->name,
+        ret->value + 1, suit_to_string(ret->suit), ret->value);
+
+    return ret;
 }
 // returns -1 if the game needs to be terminated, else returns the id of the player who won the pass
 int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
@@ -298,16 +293,40 @@ int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
     printf("TRAC: Round %d, Pass %d\n", g->round + 1, g->pass + 1);
 
     res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PASS_START, NULL);
-    if (res == -1) return -1;
+    if (res == -1) {
+        printf("NOTE: notify failure in simulate_pass\n");
+        return NULL;
+    }
 
+    struct Card *turn_card;
     while (g->turn_counter < g->player_count) {
 
-        res = serv_simulate_turn(g, &g->players[g->turn_idx]);
-        if (res == -1) return -1; // game needs to be terminated due to disconnections
+        turn_card = serv_simulate_turn(g, &g->players[g->turn_idx]);
+        if (turn_card == NULL) { // game needs to be terminated due to disconnections
+            printf("NOTE: propagated error in simulate_pass\n");
+            return NULL;
+        }
+
+        // set the first card thrown as the main suit
+        if (g->turn_counter == 0) {
+            g->pass_suit = turn_card->suit;
+        }
+
+        // record played card
+        g->pass_cards[g->turn_idx] = turn_card;
+
+        // let players know about the played card
+        struct Packet_card pc = { .suit = turn_card->suit, .val = turn_card->value };
+        res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PLAYED_CARD,
+                            &(struct EV_packet_playedcard){.whose = g->turn_idx, .card = pc});
+        if (res == -1) {
+            printf("NOTE: notify failure in simulate_èass\n");
+            return NULL;
+        }
 
         // prepare for next turn
         g->turn_counter++;
-        g->turn_idx = (g->turn_counter + g->pass_master_idx) % 4;
+        g->turn_idx = (g->turn_counter + g->pass_master_idx) % g->player_count;
     }
 
     // all turns over, calculate pass reward
@@ -315,16 +334,19 @@ int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
     pass_winner_id = select_pass_winner(g->pass_cards, g->player_count, g->pass_master_idx);
     g->players[pass_winner_id].round_score_thirds += thrown_totval;
 
+    // let players know who won
+    res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PASS_OVER,
+            &(struct EV_packet_passover){.point_thirds_won = thrown_totval, .winner_id = pass_winner_id});
+    if (res == -1) {
+        printf("NOTE: notify failure in simulate_pass\n");
+        return NULL;
+    }
+
     // print pass reward
     printf("TRAC: %s:%d won %d", g->players[pass_winner_id].name, pass_winner_id + 1, thrown_totval / 3);
     if (thrown_totval % 3) printf(".%d", (thrown_totval % 3) * 33);
     printf(" points with %d of %s --\n", g->pass_cards[pass_winner_id]->value + 1,
             suit_to_string(g->pass_cards[pass_winner_id]->suit));
-
-    // let players know who won
-    res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PASS_OVER,
-            &(struct EV_packet_passover){.point_thirds_won = thrown_totval, .winner_id = pass_winner_id});
-    if (res == -1) return -1;
 
     return pass_winner_id;
 }
@@ -361,13 +383,17 @@ int serv_simulate_round(struct Game_serv *g) {
     g->pass = 0;
 
     res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_ROUND_START, NULL);
-    if (res == -1) return -1; // game needs to be terminated due to disconnections
-
+    if (res == -1) {
+        printf("NOTE: notify failure in simulate_round\n");
+        return NULL;
+    }
     while (cards_remaining > 0) {
 
         res = serv_simulate_pass(g, (cards_remaining - g->player_count == 0));
-        if (res == -1)
-            return -1; // game needs to be terminated due to disconnections
+        if (res == -1) { // game needs to be terminated due to disconnections
+            printf("NOTE: propagated error in simulate_round\n");
+            return NULL;
+        }
 
         // prepare for next pass
         g->pass_master_idx = res;
@@ -387,7 +413,10 @@ int serv_simulate_round(struct Game_serv *g) {
         struct EV_packet_roundover pr = { .round = g->round };
         for (int i = 0; i < g->player_count; i++) { pr.score_deltas[i] = score_deltas[i]; };
         res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_ROUND_OVER, &pr);
-        if (res == -1) return -1; // game needs to be terminated due to disconnections
+        if (res == -1) {
+            printf("NOTE: notify failure in simulate_round\n");
+            return -1; // game needs to be terminated due to disconnections
+        }
     }
 
     return 0;
@@ -447,75 +476,71 @@ struct Card_node *serv_get_playermove(struct Game_serv *g, struct Player *p, int
                 response_invalid ? RQ_MOVE_INVALID : RQ_MOVE, 
                 EV_NONE, NULL);
         // check if the game has been canceled
-        if (res == -1)
+        if (res == -1) {
+            printf("NOTE: notify failure in get_playermove\n");
             return NULL;
+        }
+
+        while (true) {
+            // get the i-th (0-based) move packet out of the queue
+            pn = net_serv_need_response(
+                RS_MOVE, &p->netinfo.pk_queue,
+                0, true);
+
+            // break if no connections have been lost
+            if (pn != NULL)
+                break;
         
-        // not sure I still want this for loop
-        for (int i = 0; i < LOOKFOR_MAXPACKETS && pn == NULL; i++) {
-            
-            while (true) {
-                // get the i-th (0-based) move packet out of the queue
-                pn = net_serv_need_response(
-                    RS_MOVE, &p->netinfo.pk_queue,
-                    i, true);
-
-                // break if no connections have been lost
-                if (pn != NULL)
+            // check if one of the disconnections was from the target of the packet
+            bool resend_packet = false;
+            for (int i = 0; i < g->player_count; i++) {
+                if (g->disconnected_players[i] == p) {
+                    resend_packet = true;
                     break;
-            
-                // check if one of the disconnections was from the target of the packet
-                bool resend_packet = false;
-                for (int i = 0; i < g->player_count; i++) {
-                    if (g->disconnected_players[i] == p) {
-                        resend_packet = true;
-                        break;
-                    }
                 }
-                // return NULL if the game has been canceled
-                if (net_handle_disconnections(g) == false)
+            }
+            // return NULL if the game has been canceled
+            if (net_handle_disconnections(g) == false)
+                return NULL;
+
+            // send the target a new request packet
+            if (resend_packet == true) {
+                res = net_notify_clients(g, 
+                    (int[]) { g->turn_idx }, 1,
+                    RQ_MOVE_INVALID, 
+                    EV_NONE, NULL);
+                if (res == -1) 
                     return NULL;
-
-                // send the target a new request packet
-                if (resend_packet == true) {
-                    res = net_notify_clients(g, 
-                        (int[]) { g->turn_idx }, 1,
-                        RQ_MOVE_INVALID, 
-                        EV_NONE, NULL);
-                    if (res == -1) 
-                        return NULL;
-                    }
-            }
-
-            // attaching pointers
-            cp = (struct Client_packet *) pn->pk->data;
-            assert(cp->rs_kind == RS_MOVE);
-            rsp = (struct RS_packet_move *) cp->rs_data;
-
-            // removing move packets from an old round/pass
-            deltaround = rsp->round - of_round;
-            deltapass = rsp->pass - of_pass;
-            if (deltaround < 0 || (deltaround == 0 && deltapass < 0)) {
-                printf("INFO: Found an old RS_MOVE packet (from %d:%s on %d:%d)", p->id, p->name, rsp->round + 1, rsp->pass + 1);
-                free(pn->pk); // FIXME: can I really free the packet without acquiring the lock? consuming
-                llist_mtsafe(&p->netinfo.pk_queue, remove, pn);
-                i--;
-                continue;
-            }
-
-            // getting information out of the move packet
-            if ((deltaround == 0) && (deltapass == 0)) {
-                card_id = rsp->card_id;
-                printf("INFO: Got a RS_MOVE packet from %d:%s (card_id %d)\n", p->id, p->name, card_id);
-                free(pn->pk); // FIXME: can I really free the packet without acquiring the lock? consuming
-                llist_mtsafe(&p->netinfo.pk_queue, remove, pn);
-                
-                // checking if the player can play said card, if not, we'll send them a move invalid packet
-                ret = find_valid_card( (struct Card_node *)p->hand.head, p->card_count, card_id, g->pass_suit);
-                if (ret == NULL) {
-                    response_invalid = true;
-                    i--;
-                    break;
                 }
+        }
+
+        // attaching pointers
+        cp = (struct Client_packet *) pn->pk->data;
+        assert(cp->rs_kind == RS_MOVE);
+        rsp = (struct RS_packet_move *) cp->rs_data;
+
+        // removing move packets from an old round/pass
+        deltaround = rsp->round - of_round;
+        deltapass = rsp->pass - of_pass;
+        if (deltaround < 0 || (deltaround == 0 && deltapass < 0)) {
+            printf("INFO: Found an old RS_MOVE packet (from %d:%s on %d:%d)", p->id, p->name, rsp->round + 1, rsp->pass + 1);
+            free(pn->pk); // FIXME: can I really free the packet without acquiring the lock? consuming
+            llist_mtsafe(&p->netinfo.pk_queue, remove, pn);
+            continue;
+        }
+
+        // getting information out of the move packet
+        if ((deltaround == 0) && (deltapass == 0)) {
+            card_id = rsp->card_id;
+            printf("INFO: Got a RS_MOVE packet from %d:%s (card_id %d)\n", p->id, p->name, card_id);
+            free(pn->pk); // FIXME: can I really free the packet without acquiring the lock? consuming
+            llist_mtsafe(&p->netinfo.pk_queue, remove, pn);
+            
+            // checking if the player can play said card, if not, we'll send them a move invalid packet
+            ret = find_valid_card( (struct Card_node *)p->hand.head, p->card_count, card_id, g->pass_suit);
+            if (ret == NULL) {
+                response_invalid = true;
+                continue;
             }
         }
     } while (ret == NULL);
@@ -558,8 +583,10 @@ int serv_get_playername(struct Game_serv *g, struct Player *p, int maxsize) {
                 (int[]) { g->turn_idx }, 1,
                 RQ_NAME, 
                 EV_NONE, NULL);
-            if (res == -1) 
-                return -1;
+            if (res == -1) {
+                printf("NOTE: notify failure in get_playername\n");
+                return NULL;
+            }
         }
     }
     
