@@ -1,12 +1,12 @@
-
-#include "scenes/scenes.h"
-#include <string.h>
 #define _GNU_SOURCE
+
 #include <stdlib.h>
 #include <stdio.h>
-#include <assert.h>
-#include <stdbool.h>
 #include <unistd.h>
+#include <stdbool.h>
+
+#include <assert.h>
+#include <string.h>
 #include <math.h>
 
 #include <raylib.h>
@@ -17,7 +17,7 @@
 
 struct Render_memory *rMem = NULL;
 
-void render_status_text(unsigned int len, char *str) 
+void render_status_text(size_t len, char *str) 
 {
     const int lineMaxLen = 32;
     const int maxCharsOverMaxLen = 5;

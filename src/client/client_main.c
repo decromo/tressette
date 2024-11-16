@@ -13,7 +13,10 @@
 
 #include "client.h"
 #include "client_network.h"
+
 #include "client_seco.h"
+#include "scenes/scenes.h"
+
 #include "../common/common.h"
 #include "../common/network.h"
 #include "../common/threads.h"
@@ -267,15 +270,18 @@ void CEV_turn_start(struct Game_client *g, struct EV_packet_turnstart *evp, char
 }
 // depends on g.turn_counter: needs to be the turn where the card was played
 void CEV_played_card(struct Game_client *g, struct EV_packet_playedcard *evp, char (*names)[4][PLAYERNAME_STRLEN+1]) {
+    char str[1024] = {0};
     if (evp->whose == g->player.id) {
-        printf("You played ");
+        strncat(str, "You played ", 16);
     } else {
-        printf("%s played ", (*names)[evp->whose]);
+        strncat(str, TextFormat("%s played ", (*names)[evp->whose]), 256);
     }
-    printf("%d of %s.\n", evp->card.val + 1, suit_to_string(evp->card.suit));
+    strncat(str, TextFormat("%d of %s.\n", evp->card.val + 1, suit_to_string(evp->card.suit)), 256);
     if (g->turn_counter == 0) {
-        printf("This pass will be played on %s.\n", suit_to_string(evp->card.suit));
+        strncat(str, TextFormat("This pass will be played on %s.\n", suit_to_string(evp->card.suit)), 256);
     }
+    printf("%s", str);
+    setStatusText(str);
 }
 
 void client_apply_state(struct Game_client *g, struct Game_status *s, struct Packet_hand *hand) {
@@ -444,6 +450,7 @@ int client_handle_requests(struct Game_client *g) {
         case RQ_MOVE_INVALID:
             printf("Your last move was invalid, try again.\n");
         case RQ_MOVE:
+            setStatusText("Your turn\n");
             ret = scene_game_selectCard(g);
             if (ret == -1) break;
             last_RS_move.round = g->round;

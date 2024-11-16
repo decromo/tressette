@@ -122,7 +122,7 @@ int serv_listen(char *port) {
     hints.ai_flags = AI_PASSIVE;
     hints.ai_protocol = 0;
 
-    if ((res = getaddrinfo(NULL, default_port, &hints, &ai_res)) != 0) {
+    if ((res = getaddrinfo(NULL, port, &hints, &ai_res)) != 0) {
         fprintf(stderr, "FATL: gai = %s\n", gai_strerror(res));
         return -1;
     }
@@ -195,7 +195,7 @@ int main(int argc, char **argv) {
             return -1; // game needs to be terminated due to disconnections
         }
 
-        while (is_game_over_serv(game.players, game.player_count, game.target_score) == false) {
+        while (is_game_over_serv(game.player_count, game.players, game.target_score) == false) {
             give_cards(game.players, game.player_count, game.deck);
 
             res = serv_simulate_round(&game);
@@ -295,7 +295,7 @@ int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
     res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_PASS_START, NULL);
     if (res == -1) {
         printf("NOTE: notify failure in simulate_pass\n");
-        return NULL;
+        return -1;
     }
 
     struct Card *turn_card;
@@ -304,7 +304,7 @@ int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
         turn_card = serv_simulate_turn(g, &g->players[g->turn_idx]);
         if (turn_card == NULL) { // game needs to be terminated due to disconnections
             printf("NOTE: propagated error in simulate_pass\n");
-            return NULL;
+            return -1;
         }
 
         // set the first card thrown as the main suit
@@ -321,7 +321,7 @@ int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
                             &(struct EV_packet_playedcard){.whose = g->turn_idx, .card = pc});
         if (res == -1) {
             printf("NOTE: notify failure in simulate_èass\n");
-            return NULL;
+            return -1;
         }
 
         // prepare for next turn
@@ -339,7 +339,7 @@ int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
             &(struct EV_packet_passover){.point_thirds_won = thrown_totval, .winner_id = pass_winner_id});
     if (res == -1) {
         printf("NOTE: notify failure in simulate_pass\n");
-        return NULL;
+        return -1;
     }
 
     // print pass reward
@@ -385,14 +385,14 @@ int serv_simulate_round(struct Game_serv *g) {
     res = net_notify_clients(g, NULL, 0, RQ_NONE, EV_ROUND_START, NULL);
     if (res == -1) {
         printf("NOTE: notify failure in simulate_round\n");
-        return NULL;
+        return -1;
     }
     while (cards_remaining > 0) {
 
         res = serv_simulate_pass(g, (cards_remaining - g->player_count == 0));
         if (res == -1) { // game needs to be terminated due to disconnections
             printf("NOTE: propagated error in simulate_round\n");
-            return NULL;
+            return -1;
         }
 
         // prepare for next pass
@@ -585,7 +585,7 @@ int serv_get_playername(struct Game_serv *g, struct Player *p, int maxsize) {
                 EV_NONE, NULL);
             if (res == -1) {
                 printf("NOTE: notify failure in get_playername\n");
-                return NULL;
+                return -1;
             }
         }
     }

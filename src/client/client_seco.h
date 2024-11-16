@@ -15,6 +15,7 @@ typedef struct FilteredTexture {
 
 struct Render_memory {
     int allocSize;
+    int statusCD;
     char statusStr[512];
     RenderTexture2D ferrule;
     FilteredTexture crown;
@@ -23,6 +24,10 @@ struct Render_memory {
     struct Scene_vtable *scene_vtable;
 
     Texture2D cards;
+    RenderTexture2D cardFanBuffer;
+    char cardFanHoveringId;
+    char cardFanClickedId;
+    float cardFanWeights[20]; // FIXME: pickup MAXREC
 
     bool have_to_move;
 
@@ -32,7 +37,7 @@ struct Render_memory {
 
 extern struct Render_memory *rMem;
 void render_loop(void*);
-void render_status_text(unsigned int len, char *str);
+void render_status_text(size_t len, char *str);
 
 static inline void memInit() {
     printf("init!\n");
@@ -48,6 +53,7 @@ static inline void memInit() {
     m->scene = TAG_scene_connection;
 
     m->cards = LoadTexture("./assets/half.png");
+    m->cardFanBuffer = LoadRenderTexture(1600, 900);
 }
 
 static inline void switchScene(enum Scene_tags s) {

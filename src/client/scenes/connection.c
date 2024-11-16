@@ -1,4 +1,3 @@
-
 #define _GNU_SOURCE
 #include <assert.h>
 #include <stdbool.h>
@@ -67,13 +66,12 @@ void scene_connection(void* arg)
     float rotPerSec = 0.03;
     double startAngle = fmod(GetTime() * rotPerSec  * 360, 360);
 
-    void fillRecWithAllCards(Rectangle r);
     float factor = 1.2;
     float screenW = GetScreenWidth();
     float screenH = GetScreenHeight();
     float recW = screenW * factor;
     float recH = screenH * factor;
-    fillRecWithAllCards((Rectangle){screenW*(1-factor)/2, screenH*(1-factor)/2, recW, recH});
+    fillRecWithAllCards(startAngle, rMem->cards, (Rectangle){screenW*(1-factor)/2, screenH*(1-factor)/2, recW, recH});
 
     alphablend(startAngle);
     // DrawTextureRec(rMem->crown.res, (Rectangle){0,0,800,-600}, (Vector2){0,0}, WHITE);
