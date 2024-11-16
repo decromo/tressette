@@ -1,6 +1,7 @@
 
 #define _GNU_SOURCE
 #include <assert.h>
+#include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include <math.h>
@@ -109,6 +110,61 @@ int scene_game_selectCard(void *arg)
     return -1;
 }
 
+void cardFan(void) {
+    int atlasCardW = rMem->cards.width/10;
+    int atlasCardH = rMem->cards.height/4;
+
+    Vector2 center = (Vector2){GetScreenWidth()/2, GetScreenHeight()/16 * 15};
+    DrawCircleV(center, 10, RED);
+
+    const float factor = 200.0;
+    const float maxang = 65.0;
+    #define MAXREC 10
+
+    float weights[MAXREC] = {0};
+    for (int i = 0; i < MAXREC; i++) {
+        weights[i] = 1.0;
+    }
+    weights[2] = 1.3;
+    // weights[6] = 0;
+
+    float totweights = 0;
+    for (int i = 0; i < MAXREC; i++) {
+        totweights += weights[i] == 1 ? 1 : weights[i]*2;
+    }
+    float share = MAXREC / (float)totweights;
+    debugInfoText("share", (double)share);
+    debugInfoText("totweights", (double)totweights);
+
+
+
+    float x, y;
+    float w = 0;
+    for (int i = 0; i < MAXREC; i++) {
+        float t = 0;
+        if (i != 0 && weights[i-1] > weights[i]) 
+            w += weights[i-1];
+        else 
+            w += weights[i];
+        t = w * share/MAXREC;
+        debugInfoText(TextFormat("t%f w%f", t, w), (double)i);
+        float ang = (t * 2 - 1) * maxang;
+        x = center.x + factor*cos(DEG2RAD * (ang + 90));
+        y = center.y - factor*sin(DEG2RAD * (ang + 90));
+        DrawCircle(x, y, 5, ColorFromHSV(t, 1, 1));
+        int xSize = 100 * weights[i];
+        int ySize = 180 * weights[i];
+        DrawRectanglePro(
+            (Rectangle){x, y, xSize, ySize},
+            (Vector2){xSize/2,ySize},
+            -ang,
+            ColorFromHSV(t * 360, 1, 1)
+        );
+    }
+    debugInfoText("x", (double)x);
+    debugInfoText("y", (double)y);
+}
+
 void scene_game(void* arg)
 {
     float rotPerSec = 0.03;
@@ -134,15 +190,29 @@ void scene_game(void* arg)
 
         int n_cards = g->player.card_count;
         int rows = 4;
-        float diffOfRatios = drawRec.width / drawRec.height - cardWidthToHeightRatio*10/rows;
-        while (diffOfRatios > 0) {
-            diffOfRatios += cardWidthToHeightRatio*10/rows-1 - cardWidthToHeightRatio*10/rows;
-            // diffOfRatios += cardWidthToHeightRatio*10 / (rows-pow(rows, 2));
+        int cols = n_cards/rows + (n_cards % rows == 0 ? 0 : 1);
+
+        // float diffOfRatios = drawRec.width / drawRec.height - cardWidthToHeightRatio*cols/rows;
+        // while (diffOfRatios > 0 && rows > 1) {
+        //     diffOfRatios -= cardWidthToHeightRatio*cols/(rows-1) - cardWidthToHeightRatio*cols/rows;
+            // diffOfRatios += cardWidthToHeightRatio*10 / (-rows-pow(rows, 2));
+
+        float ratioOfRatios = (drawRec.width / drawRec.height) / (cardWidthToHeightRatio*cols/rows);
+        float newRor;
+        while (ratioOfRatios > 1 && rows > 1) {
+            newRor = (drawRec.width / drawRec.height) / (cardWidthToHeightRatio*cols/(rows-1));
+            if (newRor < 0.85) break;
+            ratioOfRatios = newRor;
             rows--;
+            cols = n_cards/rows + (n_cards % rows == 0 ? 0 : 1);
         };
+        debugInfoText("ror", (double)ratioOfRatios);
 
         fillRecWithSomeCards(drawRec, n_cards, rows);
     }
+
+    cardFan();
+    
     const char *str = "scene_game\n";
     DrawText(str, GetScreenWidth()/2 - MeasureText(str, 26)/2, GetScreenHeight()/2, 26, RAYWHITE);
 }
