@@ -328,7 +328,7 @@ int client_handle_packets(struct Game_client *g) {
 
         // tick over if no packets were found
         if (packet == NULL) {
-            usleep(500);
+            // usleep(500);
             continue;
         }
 

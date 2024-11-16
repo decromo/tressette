@@ -30,7 +30,8 @@ void render_status_text(unsigned int len, char *str)
     linefeed_string(len, rMem->statusStr, 512, lineMaxLen, maxCharsOverMaxLen, maxPrecNewlineChars);
 }
 
-void render_init(void **memPtr) {
+void render_init(void **memPtr)
+{
     assert(memPtr != NULL);
 
     rMem = *memPtr;
@@ -58,15 +59,17 @@ void render_init(void **memPtr) {
     return;
 }
 
-void debugInfoText(const char *what, double value) {
+void debugInfoText(const char *what, double value)
+{
     static float start = 0;
     // DrawRing( (Vector2){.x = -100, .y = 700}, 400, 550, 0, 360, 1, RAYWHITE);
     DrawText(TextFormat("mouse: %d %d", GetMouseX(), GetMouseY()), 0, 0, 26, GREEN);
-    DrawText(TextFormat("%s: %0.2f", what, value), 640, start, 26, GREEN);
+    DrawText(TextFormat("%s: %0.2f", what, value), GetScreenWidth() * 0.6, start, 26, GREEN);
     start += 28;
 }
 
-void render_loop(void *arg) {
+void render_loop(void *arg)
+{
     SetTraceLogLevel(LOG_ERROR);
     BeginDrawing();
     ClearBackground(GetColor(0x18181800));

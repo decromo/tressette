@@ -34,7 +34,7 @@ void plug_open() {
 
         if (plug_handle == NULL) {
             fprintf(stderr, "dlopen: %s\n", dlerror());
-            usleep(33333);
+            // usleep(33333);
         }
 
     } while (plug_handle == NULL);

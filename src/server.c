@@ -275,7 +275,7 @@ struct Card *serv_simulate_turn(struct Game_serv *g, struct Player *turn_player)
 
     return ret;
 }
-// returns -1 if the game needs to be terminated, else returns the id of the player who won the pass
+// returns the id of the player who won the pass
 int serv_simulate_pass(struct Game_serv *g, bool is_last_pass) {
     int res = 0;
     int thrown_totval = -1;
@@ -422,7 +422,7 @@ int serv_simulate_round(struct Game_serv *g) {
     return 0;
 }
 
-bool is_game_over_serv(struct Player ps[1], int n_players, int target) {
+bool is_game_over_serv(int n_players, struct Player ps[n_players], int target) {
     for (int i = 0; i < n_players; i++)
         if (ps[i].game_score >= target)
             return true;

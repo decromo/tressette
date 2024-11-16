@@ -67,7 +67,7 @@ let
   compilingScript = exeName: compilerCommand: pkgs.writeShellApplication rec {
     name = "${exeName}";
     runtimeInputs = [ raylib ];
-    passthru.text = text;
+    derivationArgs.passthru.text = text;
     text = ''
       runExe=""
       while getopts r: opt; do

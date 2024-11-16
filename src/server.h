@@ -32,7 +32,8 @@ struct Card *serv_simulate_turn(struct Game_serv *g, struct Player *turn_player)
 int serv_simulate_pass(struct Game_serv *g, bool is_last_pass);
 int select_pass_winner(struct Card **thrown, int n_thrown, int pass_master_idx);
 int serv_simulate_round(struct Game_serv *g);
-bool is_game_over_serv(struct Player ps[1], int n_players, int target);
+// TODO: use more VLA arguments
+bool is_game_over_serv(int n_players, struct Player ps[n_players], int target);
 void serv_end_game(struct Game_serv *g);
 struct Card_node *serv_get_playermove(struct Game_serv *g, struct Player *p, int of_round, int of_pass);
 int serv_get_playername(struct Game_serv *g, struct Player *p, int maxsize);

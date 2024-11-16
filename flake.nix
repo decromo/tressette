@@ -48,7 +48,7 @@
       pkgs.stdenv.mkDerivation (finalAttrs: {
         inherit pname;
         version = "0.0.1";
-        src = ./src;
+        src = builtins.path { path = ./src; name = "tressette"; };
 
         buildInputs = /* with pkgs; */ [ raylibDrv ];
 
