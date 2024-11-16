@@ -31,7 +31,7 @@ let
       seco = ''gcc -shared -o ../libsecoclient.so -fPIC ${commonCompilerFlags} -DPLUG_FILE=\""./libsecoclient.so\"" ${clientSecoFilesString};'';
     };
     server = {
-      main = ''gcc ${serverMainFilesString} ${commonCompilerFlags} -export-dynamic -o ../server;'';
+      main = ''gcc ${lib.concatStringsSep " " [serverMainFilesString serverSecoFilesString]} ${commonCompilerFlags} -export-dynamic -o ../server;'';
       # seco = ''gcc -shared -o ../libsecoserver.so -fPIC ${commonCompilerFlags} -DPLUG_FILE="\"./libsecoserver.so\"" ${serverSecoFilesString};'';
     };
   };

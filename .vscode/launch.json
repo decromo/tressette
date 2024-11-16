@@ -5,7 +5,7 @@
             "name": "Debug server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceRoot}/result/bin/tressette-client",
+            "program": "${workspaceRoot}/server",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",

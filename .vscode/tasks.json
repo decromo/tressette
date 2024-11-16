@@ -19,10 +19,8 @@
         {
             "type": "cppbuild",
             "label": "Build server",
-            "command": "cat << 'EORUN' | eval",
+            "command": "ccserver",
             "args": [
-                "$serverBuild",
-                "EORUN"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
