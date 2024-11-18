@@ -7,7 +7,7 @@
 #include <raylib.h>
 
 #include "../client_seco.h"
-#include "scenes.h"
+#include "scene_vtable.h"
 #include "scene_utils.h"
 
 extern struct Render_memory *rMem;

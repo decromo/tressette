@@ -118,9 +118,19 @@ let
       ccseco
     ];
     text = ''
-      trap 'kill 0' INT;
-      while getopts r opt; do case $opt in r) run="./client";; *) break;; esac; done;
-      ccclient ''${run:+-r "$run"} && while sleep 0.1; do find ./src -name '*.c' -or -name '*.h' | entr -cd ccseco; done'';
+      trap 'kill 0' INT
+      while getopts r opt; do case $opt in
+        r) run="1";;
+        *) break;;
+      esac; done;
+      ccclient && if [[ -n ''${run:+yes} ]]; then
+        echo yes
+        ./client "$@" &
+      fi
+      sleep 1
+      while sleep 0.1; do
+        find ./src -name '*.c' -or -name '*.h' | entr -cd ccseco
+      done'';
   };
 in
 pkgs.mkShell {

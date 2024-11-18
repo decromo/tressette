@@ -11,7 +11,7 @@
 #include "../../common/common.h"
 #include "scene_utils.h"
 #include "../client_seco.h"
-#include "scenes.h"
+#include "scene_vtable.h"
 
 void loading1(Vector2 centre, float scale);
 void loading2(Vector2 centre, float scale);
@@ -21,16 +21,21 @@ extern struct Render_memory *rMem;
 
 static double startAngle;
 
+static int cardCount;
 static struct Card cardArr[20];
 
-static Texture2D cards;
+static Texture2D atlas;
 static int atlasCardW;
 static int atlasCardH;
 
-static int hoverCardFan(void) {
+static float angs[MAXREC];
+static Rectangle recs[MAXREC];
+
+static int hoverCardFan(void) 
+{
     int ret = -1;
 
-    Image img = LoadImageFromTexture(rMem->cardFanBuffer.texture);
+    Image img = LoadImageFromTexture(rMem->cardFanBuf.texture);
     // float xRatio = (float)img.width/GetScreenWidth();
     // float yRatio = (float)img.height/GetScreenHeight();
     // debugInfoText("xRatio", (double)xRatio);
@@ -51,95 +56,152 @@ static int hoverCardFan(void) {
     return ret;
 }
 
-static void cardFan(void *arg)
+static float easing(float *in) 
 {
-    int handSize = ((struct Game_client*)arg)->player.hand.size;
+    float out = *in;
+    if (out > 1) out = 1;
+    if (out < 0) out = 0;
+    *in = out;
+    
+    return out;
+}
+static void updateCardFan(void)
+{
+    const int hoveringId = rMem->cardFanHoveringId;
+    float *ts = rMem->cardFanTs;
 
-    RenderTexture2D tex = rMem->cardFanBuffer;
-    float *weights = rMem->cardFanWeights;
-    int id = rMem->cardFanHoveringId;
+    float new_ts, new_seg, prev_seg;
+    float deltaWs[MAXREC] = {0};
+    float totDeltaWs = 0;
 
-    float totweights = 0;
-    float new_w;
-    for (int i = 0; i < handSize; i++) {
-        new_w = (i == id) 
-            ? weights[i] + 0.1
-            : weights[i] - 0.1;
-        if (new_w > 1.5) new_w = 1.5;
-        if (new_w <= 1) {
-            new_w = 1;
-            totweights += 1;
-        } else {
-            totweights += 1 + (new_w-1);
-        }
-        weights[i] = new_w;
+    for (int i = 0; i < cardCount; i++) {
+        // animate depending on selection
+        new_ts = 
+            (i == hoveringId) 
+            ? ts[i] + 0.1      // grow
+            : ts[i] - 0.1;     // shrink
+        
+        new_seg = easing(&new_ts) / 2;
+        ts[i] = new_ts;
+
+        // add previous segment weighting to total (first element has no previous segment)
+        if (i != 0)
+            if (prev_seg > new_seg)
+                totDeltaWs += prev_seg;
+            else
+                totDeltaWs += new_seg;
+
+        // update array and trailing value
+        deltaWs[i] = prev_seg = new_seg;
     }
-    float share = 1 / (float)(totweights-1);
 
+    float totalWeight = totDeltaWs + cardCount - 1;
 
-    Vector2 center = (Vector2){GetScreenWidth()/2, GetScreenHeight()/16 * 15};
+    // debugInfoText(TextFormat("tdws%.2f cardcount%d totalw", tot_seg, cardCount), totalWeight);
+
+    // Parameters
+    const int sw = GetScreenWidth();
+    const int sh = GetScreenHeight();
+    Vector2 center = (Vector2){sw/2, sh + (sw*1.5)};
+    const float distance = sqrt(sh * sh * 0.02) + (sw*1.5);      // center to card origin distance
+    const float scale = 200.0;                // card scale
+    const float acos_arg = center.x*0.7 * ((float)cardCount / 20) / (scale + distance);
+    // const float acos_arg = center.x / ((float)sw/1600) * ((float)cardCount / 20) / (scale + distance);
+    const float maxAngMag = PI/2 - acos(acos_arg);    // fan out cards from -maxang to +maxang
+    debugInfoText(TextFormat("cx%.2f cy", center.x), (double)(center.y));
+    debugInfoText(TextFormat("distance %.2f maxang%.2f acos-arg", distance, maxAngMag), (double)(acos_arg));
+
+    // dbg
     DrawCircleV(center, 10, RED);
+    debugInfoText("hover:", (double)hoveringId);
 
-    const float factor = 200.0;
-    const float maxang = 65.0;
+    float x, y, t, ang, height;
+    float acc = 0;
 
-    float x, y;
-    float Ew = 0;
+    // Compute angles and sizes
+    for (int i = 0; i < cardCount; i++) {
+        t      = acc / totalWeight;
+        ang    = maxAngMag * (-t * 2 + 1);                  // from maxang to -maxang in radians
+        x      = center.x + distance*cos(ang + PI/2);
+        y      = center.y - distance*sin(ang + PI/2);
+        height = scale * (1 + deltaWs[i]);
+        // debugInfoText(TextFormat("i%d acc%.2f dw%.2f x%.2f y%.2f ang%.2f t", i, acc, delta_w[i], x, y, ang), (double)t);
 
-    float angs[MAXREC];
-    Rectangle recs[MAXREC];
-    Vector2 vecs[MAXREC];
+        // dbg: draw card origins
+        DrawCircle(x, y, 5, GREEN);
 
-    debugInfoText("handsiz", (double)handSize);
-    debugInfoText("totweights", (double)totweights);
-    // Compute positions and draw textures to screen
-    for (int i = 0; i < handSize; i++) {
-        float t = 0;
-        if (handSize == 1) t = 0.5;
-        else {
-            t = Ew * share;
-        }
-        // if (i != handSize-1 && weights[i+1] > weights[i]) 
-        //     Ew += weights[i+1];
-        // else 
-            Ew += weights[i];
-        debugInfoText(TextFormat("i%d w%.2f Ew%.2f t", i, weights[i], Ew), (double)t);
+        // store computations for both draw calls
+        angs[i] = RAD2DEG * -ang;           // Raylib's rotation argument for drawing shapes start at 90° and goes cw :/
+        recs[i] = (Rectangle){ x, y, height * cardWidthToHeightRatio, height };
+        
+        // add to accumulator the next segment's weight (it is the biggest value between this and next card's weight) for use in the next card's loop
+        if (deltaWs[i+1] > deltaWs[i])
+            acc += 1 + deltaWs[i+1];
+        else
+            acc += 1 + deltaWs[i];
+    }
+}
+static void drawCardTextures(RenderTexture2D *buf)
+{
+    if (buf) {
+        BeginTextureMode(*buf);
+        ClearBackground(BLANK);
+    }
 
-        float ang = angs[i] = (t * 2 - 1) * maxang;
-        recs[i] = (Rectangle){
-            center.x + factor*cos(DEG2RAD * (ang + 90)),
-            center.y - factor*sin(DEG2RAD * (ang + 90)),
-            100 * weights[i],
-            180 * weights[i]
-        };
-        vecs[i] = (Vector2){recs[i].width / 2, recs[i].height};
+    for (int i = 0; i < cardCount; i++)
         DrawTexturePro(
-            cards,
+            atlas,
             (Rectangle){ atlasCardW*cardArr[i].value, atlasCardH*cardArr[i].suit, atlasCardW, atlasCardH },
             recs[i],
-            vecs[i],
-            -angs[i],
+            (Vector2){recs[i].width / 2, recs[i].height},
+            angs[i],
             ColorBrightness(WHITE, -0.3)
         );
-        DrawCircle(recs[i].x, recs[i].y, 5, GREEN);
+
+    if (buf) EndTextureMode();
+}
+static void drawCardBoxes(RenderTexture2D *buf)
+{
+    if (buf) {
+        BeginTextureMode(*buf);
+        ClearBackground(BLANK);
     }
 
     // Draw same regions as colored "hitboxes" to a render buffer
-    BeginTextureMode(tex);
-    ClearBackground(BLANK);
-    for (int i = 0; i < handSize; i++) {
-        Color redness = {1+i, 0, i*20, 255}; // blue channel is for humans to see
+    float xRatio = 1; /* (float)buf->texture.width/GetScreenWidth(); */ 
+    float yRatio = 1; /* (float)buf->texture.height/GetScreenHeight(); */
+    Color redColor = {0, 0, 0, 255};
+    const float blueStep = (float)255/cardCount;  // this is just for display purposes
+    for (int i = 0; i < cardCount; i++) {
+        // red channel is for the clickable button, blue channel is for humans to see
+        redColor.r = 1+i; 
+        redColor.b = (1+i)*blueStep; 
+
         DrawRectanglePro(
-            recs[i],
-            vecs[i],
-            -angs[i],
-            redness
+            (Rectangle){ recs[i].x * xRatio, recs[i].y * yRatio, recs[i].width * xRatio, recs[i].height * yRatio },
+            (Vector2){ recs[i].width * xRatio / 2, recs[i].height * yRatio},
+            angs[i],
+            redColor
         );
     }
-    EndTextureMode();
+
+    if (buf) EndTextureMode();
+}
+static void drawStatusText(void)
+{
+    if (rMem->statusCD <= 0) return;
+
+    rMem->statusCD--;
+    float textLen = MeasureText(rMem->statusStr, 26);
+    float textX = (GetScreenWidth()/2) - textLen/2;
+    float textY = GetScreenHeight()/3;
+    float textSize = 26;
+    DrawRectangle(textX-4, textY-4, textLen+8, textSize+8, Fade(GetColor(0x181818ff), 0.8));
+    DrawText(rMem->statusStr, textX, textY, textSize, GREEN);
 }
 
-int scene_game_selectCard(void *arg) {
+int scene_game_selectCard(void *arg) 
+{
     (void)arg;
     int ret = -1;
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
@@ -157,7 +219,8 @@ int scene_game_selectCard(void *arg) {
     return ret;
 }
 
-void setStatusText(const char *str) {
+void setStatusText(const char *str)
+{
     rMem->statusCD = 90;
     
     int len = strlen(str);
@@ -172,64 +235,33 @@ void setStatusText(const char *str) {
     linefeed_string(len, rMem->statusStr, 512, maxlen, 2, 4);
 }
 
+
 void scene_game(void* arg)
 {
+    struct Game_client *g = arg;
+
     float rotPerSec = 0.03;
     startAngle = fmod(GetTime() * rotPerSec  * 360, 360);
-    cards = rMem->cardAtlas;
-    atlasCardW = cards.width/10;
-    atlasCardH = cards.height/4;
 
-    struct Game_client *g = arg;
+    atlas = rMem->cardAtlas;
+    atlasCardW = atlas.width/10;
+    atlasCardH = atlas.height/4;
+
+    cardCount = g->player.hand.size;
+
     struct Card_node *cn = (struct Card_node*)g->player.hand.head;
-    for (int i = 0; i < g->player.hand.size; i++) {
+    for (int i = 0; i < cardCount; i++) {
         assert(cn != NULL);
         cardArr[i] = *cn->c;
         cn = (struct Card_node*)cn->node.next;
     }
 
-    cardFan(arg);
+    updateCardFan();
+    drawCardBoxes(&rMem->cardFanBuf);
+    drawCardTextures(NULL);
     rMem->cardFanHoveringId = hoverCardFan();
 
-    DrawTextureRec(rMem->cardFanBuffer.texture, (Rectangle){0, 0, rMem->cardFanBuffer.texture.width, -rMem->cardFanBuffer.texture.height}, (Vector2){0, 0}, WHITE);
+    DrawTextureRec(rMem->cardFanBuf.texture, (Rectangle){0, 0, rMem->cardFanBuf.texture.width, -rMem->cardFanBuf.texture.height}, (Vector2){0, 0}, WHITE);
     
-    // const char *str = "scene_game\n";
-    if (rMem->statusCD > 0) {
-        rMem->statusCD--;
-        float textLen = MeasureText(rMem->statusStr, 26);
-        float textX = (GetScreenWidth()/2) - textLen/2;
-        float textY = GetScreenHeight()/3;
-        float textSize = 26;
-        DrawRectangle(textX-4, textY-4, textLen+8, textSize+8, Fade(GetColor(0x181818ff), 0.8));
-        DrawText(rMem->statusStr, textX, textY, textSize, GREEN);
-    }
+    drawStatusText();
 }
-
-
-
-
-// void wack() {
-//     // RenderTexture2D target = LoadRenderTexture(600, 600);
-//     // BeginTextureMode(target);
-//     // DrawCrownedCircle((Vector2){300, 300}, 300, 0, RAYWHITE);
-//     // EndTextureMode();
-//     // DrawTextureRec(target.texture, (Rectangle){0, 0, 600, 600}, (Vector2){0, 0}, WHITE);
-    
-//     // Image background = GenImageGradientLinear(600, 600, 45, BLUE, DARKPURPLE);
-//     // Image ghiera = LoadImageFromTexture(target.texture);
-//     // ImageAlphaMask(&background, ghiera);
-//     // Texture2D ghieracool = LoadTextureFromImage(background);
-//     // UnloadImage(ghiera); UnloadImage(background);
-//     // DrawTexture(ghieracool, 100, 0, WHITE);
-//     // DrawTexturePro(ghieracool, (Rectangle){-50,0,600,600}, (Rectangle){400,300,600,600}, (Vector2){400,300}, 0,  WHITE);
-
-//     // while (!IsTextureReady(rState.crownTexture))
-//         // SetShapesTexture(rState.crownTexture, (Rectangle){0, 0, 99, 128});
-//     // Image img = GenImageColor(128, 128, WHITE);
-//     // Texture2D tex = LoadTextureFromImage(img);
-//     // UnloadImage(img);
-//     // SetShapesTexture(tex, (Rectangle){0,0,128,128});
-//     // UnloadTexture(tex);
-// }
-
-

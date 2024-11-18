@@ -15,7 +15,7 @@
 #include "client_network.h"
 
 #include "client_seco.h"
-#include "scenes/scenes.h"
+#include "scenes/scene_vtable.h"
 
 #include "../common/common.h"
 #include "../common/network.h"

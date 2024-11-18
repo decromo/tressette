@@ -6,7 +6,6 @@
 
 #include "../../common/common.h"
 
-
 #define SCENE_VFUNCS \
     F(scene_connection, void, void*) \
     F(scene_game, void, void*)

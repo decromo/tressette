@@ -8,6 +8,8 @@
 
 extern struct Render_memory *rMem;
 
+#define MAXREC 20
+static const float cardWidthToHeightRatio = 0.605119;
 
 #define SINUSOID_WRONG(amp, freq, phase) \
         (((float)amp) * sin(RAD2DEG * ((float)freq) * ((float)phase)))
@@ -22,9 +24,9 @@ static inline void render_image(Image *i) {
     DrawTexture(rMem->debug_texture, 0, 0, WHITE);
 }
 
-// SCENE_GAME SECTION
-#define MAXREC 20
-
-static const float cardWidthToHeightRatio = 0.605119;
+// SCENE_CONNECTION SECTION
 void fillRecWithAllCards(double startAngle, Texture2D cardTexture, Rectangle r);
+
+// SCENE_GAME SECTION
+
 

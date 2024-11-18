@@ -4,7 +4,7 @@
 #include <raylib.h>
 #include <stdio.h>
 
-#include "scenes/scenes.h"
+#include "scenes/scene_vtable.h"
 #include "../common/common.h"
 
 typedef struct FilteredTexture {
@@ -26,10 +26,11 @@ struct Render_memory {
     Texture2D cardAtlas;
     int atlasCardW;
     int atlasCardH;
-    RenderTexture2D cardFanBuffer;
+
+    RenderTexture2D cardFanBuf;
     char cardFanHoveringId;
     char cardFanClickedId;
-    float cardFanWeights[20]; // FIXME: pickup MAXREC
+    float cardFanTs[20]; // FIXME: pickup MAXREC
 
     bool have_to_move;
 
@@ -37,32 +38,10 @@ struct Render_memory {
     Texture2D debug_texture;
 };
 
-extern struct Render_memory *rMem;
 void render_loop(void*);
 void render_status_text(size_t len, char *str);
 
-static inline void memInit() {
-    printf("init!\n");
-    struct Render_memory *m = rMem;
-
-    m->ferrule = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-    {
-        m->crown.bg = GenImageColor(GetScreenWidth(), GetScreenHeight(), BLANK);
-        m->crown.mask = LoadRenderTexture(m->crown.bg.width, m->crown.bg.height),
-        m->crown.res = LoadTextureFromImage(m->crown.bg);
-    }
-
-    m->scene = TAG_scene_connection;
-
-    m->cardAtlas = LoadTexture("./assets/half.png");
-    m->atlasCardW = m->cardAtlas.width/10;
-    m->atlasCardH = m->cardAtlas.height/4;
-    m->cardFanBuffer = LoadRenderTexture(1600, 900);
-}
-
-static inline void switchScene(enum Scene_tags s) {
-    rMem->scene = s;
-}
+void switchScene(enum Scene_tags s);
 
 int scene_game_selectCard(void *arg);
 
