@@ -115,7 +115,7 @@ static void cardFan(void *arg)
         vecs[i] = (Vector2){recs[i].width / 2, recs[i].height};
         DrawTexturePro(
             cards,
-            (Rectangle){ atlasCardW*cardArr[i].value, atlasCardH*cardArr[i].suit, atlasCardW, atlasCardH},
+            (Rectangle){ atlasCardW*cardArr[i].value, atlasCardH*cardArr[i].suit, atlasCardW, atlasCardH },
             recs[i],
             vecs[i],
             -angs[i],
@@ -176,7 +176,7 @@ void scene_game(void* arg)
 {
     float rotPerSec = 0.03;
     startAngle = fmod(GetTime() * rotPerSec  * 360, 360);
-    cards = rMem->cards;
+    cards = rMem->cardAtlas;
     atlasCardW = cards.width/10;
     atlasCardH = cards.height/4;
 
@@ -190,6 +190,8 @@ void scene_game(void* arg)
 
     cardFan(arg);
     rMem->cardFanHoveringId = hoverCardFan();
+
+    DrawTextureRec(rMem->cardFanBuffer.texture, (Rectangle){0, 0, rMem->cardFanBuffer.texture.width, -rMem->cardFanBuffer.texture.height}, (Vector2){0, 0}, WHITE);
     
     // const char *str = "scene_game\n";
     if (rMem->statusCD > 0) {
@@ -204,34 +206,7 @@ void scene_game(void* arg)
 }
 
 
-void fillRecWithAllCards(double startAngle, Texture2D cardTexture, Rectangle r)
-{
-    float startingX = r.x;
-    float endingX = r.x + r.width;
-    float cardWidth = cardWidthToHeightRatio * r.height/4;
-    bool centerHorizontally = ((float)r.width / (float)r.height > cardWidthToHeightRatio*10/4);
-    if (centerHorizontally) {
-        int shift = (r.width - cardWidth*10) / 2;
-        startingX += shift;
-        endingX -= shift;
-        // debugInfoText((double)endingX);
-        // debugInfoText((double)startingX);
-    }
 
-    int atlasCardW = cardTexture.width/10;
-    int atlasCardH = cardTexture.height/4;
-
-    for (int i = 0; i < 40; i++) {
-        DrawTexturePro(
-            cardTexture, (Rectangle){i % 10 * atlasCardW, i / 10 * atlasCardH, .width = atlasCardW, .height = atlasCardH},
-            (Rectangle){
-                .x = cardWidth/2 + startingX + i%10 * (endingX-startingX-cardWidth)/9,
-                .y = r.height/8 + i/10 * r.height/4 + r.y,
-                .width = cardWidth,
-                .height = r.height/4},
-            (Vector2){cardWidth/2,r.height/8}, startAngle*2 + (float)GetRandomValue(0,1000)/80.0f - 5.0f, ColorBrightness(WHITE, -0.8));
-    }
-}
 
 // void wack() {
 //     // RenderTexture2D target = LoadRenderTexture(600, 600);

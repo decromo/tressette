@@ -6,8 +6,6 @@
 
 #include "../../common/common.h"
 
-void debugInfoText(const char *what, double val);
-void setStatusText(const char *str);
 
 #define SCENE_VFUNCS \
     F(scene_connection, void, void*) \

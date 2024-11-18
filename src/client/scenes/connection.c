@@ -71,7 +71,7 @@ void scene_connection(void* arg)
     float screenH = GetScreenHeight();
     float recW = screenW * factor;
     float recH = screenH * factor;
-    fillRecWithAllCards(startAngle, rMem->cards, (Rectangle){screenW*(1-factor)/2, screenH*(1-factor)/2, recW, recH});
+    fillRecWithAllCards(startAngle, rMem->cardAtlas, (Rectangle){screenW*(1-factor)/2, screenH*(1-factor)/2, recW, recH});
 
     alphablend(startAngle);
     // DrawTextureRec(rMem->crown.res, (Rectangle){0,0,800,-600}, (Vector2){0,0}, WHITE);
@@ -106,6 +106,36 @@ void scene_connection(void* arg)
     // UnloadRenderTexture(crown_circs);
 }
 
+void fillRecWithAllCards(double startAngle, Texture2D cardTexture, Rectangle r)
+{
+    float startingX = r.x;
+    float endingX = r.x + r.width;
+    float cardWidth = cardWidthToHeightRatio * r.height/4;
+    bool centerHorizontally = ((float)r.width / (float)r.height > cardWidthToHeightRatio*10/4);
+    if (centerHorizontally) {
+        int shift = (r.width - cardWidth*10) / 2;
+        startingX += shift;
+        endingX -= shift;
+        // debugInfoText((double)endingX);
+        // debugInfoText((double)startingX);
+    }
+
+    for (int i = 0; i < 40; i++) {
+        DrawTexturePro(
+            cardTexture,
+            (Rectangle){
+                .x = i % 10 * rMem->atlasCardW,
+                .y = i / 10 * rMem->atlasCardH,
+                .width = rMem->atlasCardW,
+                .height = rMem->atlasCardH},
+            (Rectangle){
+                .x = cardWidth/2 + startingX + i%10 * (endingX-startingX-cardWidth)/9,
+                .y = r.height/8 + i/10 * r.height/4 + r.y,
+                .width = cardWidth,
+                .height = r.height/4},
+            (Vector2){cardWidth/2,r.height/8}, startAngle*2 + (float)GetRandomValue(0,1000)/80.0f - 5.0f, ColorBrightness(WHITE, -0.8));
+    }
+}
 
 // void rotate_single_ferrule(RenderTexture2D *ferrule, double angle)
 // {

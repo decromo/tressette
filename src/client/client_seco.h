@@ -23,7 +23,9 @@ struct Render_memory {
     enum Scene_tags scene;
     struct Scene_vtable *scene_vtable;
 
-    Texture2D cards;
+    Texture2D cardAtlas;
+    int atlasCardW;
+    int atlasCardH;
     RenderTexture2D cardFanBuffer;
     char cardFanHoveringId;
     char cardFanClickedId;
@@ -31,7 +33,7 @@ struct Render_memory {
 
     bool have_to_move;
 
-    // Texture asd;
+    // Texture2D asd;
     Texture2D debug_texture;
 };
 
@@ -52,7 +54,9 @@ static inline void memInit() {
 
     m->scene = TAG_scene_connection;
 
-    m->cards = LoadTexture("./assets/half.png");
+    m->cardAtlas = LoadTexture("./assets/half.png");
+    m->atlasCardW = m->cardAtlas.width/10;
+    m->atlasCardH = m->cardAtlas.height/4;
     m->cardFanBuffer = LoadRenderTexture(1600, 900);
 }
 
