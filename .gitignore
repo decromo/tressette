@@ -1,14 +1,16 @@
 .direnv
 offline/
 
-result
-./server
-./client
-*.so
+!src
+
+/result
+/server*
+/client*
+/*.so
 
 core*
 *.zip
 
-source
-a
-b
+source/
+a/
+b/
