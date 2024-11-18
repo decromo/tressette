@@ -70,9 +70,11 @@ static void updateCardFan(void)
     const int hoveringId = rMem->cardFanHoveringId;
     float *ts = rMem->cardFanTs;
 
+    const float growFactor = 1.6;
+
     float new_ts, new_seg, prev_seg;
-    float deltaWs[MAXREC] = {0};
-    float totDeltaWs = 0;
+    float ws[MAXREC] = {0};
+    float totalWeight = 0;
 
     for (int i = 0; i < cardCount; i++) {
         // animate depending on selection
@@ -81,23 +83,22 @@ static void updateCardFan(void)
             ? ts[i] + 0.1      // grow
             : ts[i] - 0.1;     // shrink
         
-        new_seg = easing(&new_ts) / 2;
+        new_seg = 1 + (easing(&new_ts)) * (growFactor-1);
         ts[i] = new_ts;
 
         // add previous segment weighting to total (first element has no previous segment)
         if (i != 0)
             if (prev_seg > new_seg)
-                totDeltaWs += prev_seg;
+                totalWeight += prev_seg;
             else
-                totDeltaWs += new_seg;
+                totalWeight += new_seg;
 
         // update array and trailing value
-        deltaWs[i] = prev_seg = new_seg;
+        ws[i] = prev_seg = new_seg;
     }
 
-    float totalWeight = totDeltaWs + cardCount - 1;
 
-    // debugInfoText(TextFormat("tdws%.2f cardcount%d totalw", tot_seg, cardCount), totalWeight);
+    debugInfoText(TextFormat("cardcount%d totalw", cardCount), (double)totalWeight);
 
     // Parameters
     const int sw = GetScreenWidth();
@@ -124,8 +125,8 @@ static void updateCardFan(void)
         ang    = maxAngMag * (-t * 2 + 1);                  // from maxang to -maxang in radians
         x      = center.x + distance*cos(ang + PI/2);
         y      = center.y - distance*sin(ang + PI/2);
-        height = scale * (1 + deltaWs[i]);
-        // debugInfoText(TextFormat("i%d acc%.2f dw%.2f x%.2f y%.2f ang%.2f t", i, acc, delta_w[i], x, y, ang), (double)t);
+        height = scale * ws[i];
+        // debugInfoText(TextFormat("i%d acc%.2f ws%.2f x%.2f y%.2f ang%.2f t", i, acc, ws[i], x, y, ang), (double)t);
 
         // dbg: draw card origins
         DrawCircle(x, y, 5, GREEN);
@@ -135,10 +136,10 @@ static void updateCardFan(void)
         recs[i] = (Rectangle){ x, y, height * cardWidthToHeightRatio, height };
         
         // add to accumulator the next segment's weight (it is the biggest value between this and next card's weight) for use in the next card's loop
-        if (deltaWs[i+1] > deltaWs[i])
-            acc += 1 + deltaWs[i+1];
+        if (ws[i+1] > ws[i])
+            acc += ws[i+1];
         else
-            acc += 1 + deltaWs[i];
+            acc += ws[i];
     }
 }
 static void drawCardTextures(RenderTexture2D *buf)
@@ -160,7 +161,7 @@ static void drawCardTextures(RenderTexture2D *buf)
 
     if (buf) EndTextureMode();
 }
-static void drawCardBoxes(RenderTexture2D *buf)
+static void drawCardBoxes(RenderTexture2D *buf) 
 {
     if (buf) {
         BeginTextureMode(*buf);
@@ -260,8 +261,9 @@ void scene_game(void* arg)
     drawCardBoxes(&rMem->cardFanBuf);
     drawCardTextures(NULL);
     rMem->cardFanHoveringId = hoverCardFan();
-
-    DrawTextureRec(rMem->cardFanBuf.texture, (Rectangle){0, 0, rMem->cardFanBuf.texture.width, -rMem->cardFanBuf.texture.height}, (Vector2){0, 0}, WHITE);
+    if (IsKeyDown(KEY_H)) {
+        DrawTextureRec(rMem->cardFanBuf.texture, (Rectangle){0, 0, rMem->cardFanBuf.texture.width, -rMem->cardFanBuf.texture.height}, (Vector2){0, 0}, WHITE);
+    }
     
     drawStatusText();
 }
