@@ -5,6 +5,8 @@
 #include "common.h"
 #include "raylib.h"
 
+
+
 void arr_remove_shift(size_t arr_size, void *arr_raw, size_t elem_size, int index) {
     // char (*arr)[elem_size];
 
@@ -12,8 +14,17 @@ void arr_remove_shift(size_t arr_size, void *arr_raw, size_t elem_size, int inde
     memmove(arr_raw + (index*elem_size), arr_raw + ((index+1)*elem_size), elem_size * (arr_size-index-1));
 }
 
-
-void dynarray_append(void **da_raw, size_t elem_size, void *elem) {
+#define dynarray_append(da_ptr, elem_ptr) _dynarray_append((void**)(da_ptr), sizeof(typeof(*(elem_ptr))), (elem_ptr))
+#define dynarray_set(da_ptr, idx, elem_ptr) _dynarray_set((void**)(da_ptr), sizeof(typeof(*(elem_ptr))), (idx), (elem_ptr))
+#define dynarray_append_v(da_ptr, value) do { \
+        char _elem_buf[sizeof(value)] \
+        _dynarray_append((void**)(da_ptr), sizeof(value), (_elem_buf)) \
+    } while (0)
+#define dynarray_set_v(da_ptr, idx, value) do { \
+        char _elem_buf[sizeof(value)] \
+        _dynarray_set((void**)(da_ptr), sizeof(*(elem_ptr)), (idx), (value)) \
+    } while (0)
+void _dynarray_append(void *da_raw[static 1], size_t elem_size, void *elem) {
     struct dynarray {
         size_t capacity;
         size_t size;
@@ -36,7 +47,8 @@ void dynarray_append(void **da_raw, size_t elem_size, void *elem) {
     // Copy new element over
     memcpy(&da->data[da->size*elem_size], elem, elem_size);
 }
-void dynarray_insert(void **da_raw, size_t elem_size, size_t index, void *elem) {
+
+void _dynarray_set(void *da_raw[static 1], size_t elem_size, size_t index, void *elem) {
     struct dynarray {
         size_t capacity;
         size_t size;
