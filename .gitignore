@@ -1,6 +1,3 @@
-.direnv
-offline/
-
 !src
 
 /result
@@ -8,9 +5,12 @@ offline/
 /client*
 /*.so
 
-core*
-*.zip
-
+.direnv/
+offline/
 source/
 a/
 b/
+
+*.zip
+*.old
+core*
