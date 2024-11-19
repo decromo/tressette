@@ -1,9 +1,8 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 set -euo pipefail
 numeri=(Asso Due Tre Quattro Cinque Sei Sette Otto Nove Dieci)
 semi=(denari coppe spade bastoni)
-
 
 set +e
 rm -rf pages
