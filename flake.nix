@@ -27,7 +27,6 @@
       "server/server_network.c"
     ];
     commonSecoFiles = [
-      "common/utils.c"
       "common/common.c"
     ];
     serverSecoFiles = [

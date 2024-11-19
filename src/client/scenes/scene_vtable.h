@@ -20,22 +20,14 @@ enum Scene_tags {
     #undef F
 };
 
-struct Scene_vtable {
-    size_t capacity;
-    size_t size;
-    void (*table[])(void*);
-}__attribute__((packed));
+typedef void (*Scene_func)(void*);
 
-static inline void scene_vtable_gen(struct Scene_vtable **t) {
+static inline void scene_vtable_gen(struct Scene_func **t) {
     if (*t == NULL) {
-        size_t starting_capacity = 4;
-        *t = (struct Scene_vtable*)RL_MALLOC(sizeof(**t) + sizeof(typeof((**t).table[0])) /* * starting_capacity */);
-        (*t)->capacity = starting_capacity;
+        *t = _dynarray_init(sizeof(Scene_func), (4));
     }
     void *func_ptr = NULL;
-    #define F(name, ...) \
-        func_ptr = (void*)name; \
-        dynarray_insert((void**)t, sizeof((**t).table[0]), TAG_##name, &func_ptr);
+    #define F(name, ...) da_set_v(*t, TAG_##name, (void*)name);
     SCENE_VFUNCS
     #undef F
 }

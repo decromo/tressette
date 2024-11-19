@@ -11,6 +11,8 @@
 #include <stdio.h>
 
 #include "llist.h"
+#include "dynarray.h"
+#include "utils.h"
 
 enum Suits {
     DENARI  = 0,

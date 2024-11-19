@@ -89,7 +89,7 @@ void render_loop(void *arg)
     float rotPerSec = 0.03;
     double startAngle = fmod(GetTime() * rotPerSec  * 360, 360);
 
-    rMem->scene_vtable->table[rMem->scene](arg);
+    rMem->scene_vtable[rMem->scene](arg);
 
     if (IsKeyPressed(KEY_S)) {
         rMem->scene = (rMem->scene + 1) % 2;

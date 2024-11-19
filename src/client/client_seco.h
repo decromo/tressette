@@ -21,7 +21,7 @@ struct Render_memory {
     FilteredTexture crown;
 
     enum Scene_tags scene;
-    struct Scene_vtable *scene_vtable;
+    Scene_func *scene_vtable;
 
     Texture2D cardAtlas;
     int atlasCardW;

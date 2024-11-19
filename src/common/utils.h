@@ -5,74 +5,11 @@
 #include "common.h"
 #include "raylib.h"
 
-
-
-void arr_remove_shift(size_t arr_size, void *arr_raw, size_t elem_size, int index) {
+static inline void arr_remove_shift(size_t arr_size, void *arr_raw, size_t elem_size, int index) {
     // char (*arr)[elem_size];
 
     assert(index < arr_size);
     memmove(arr_raw + (index*elem_size), arr_raw + ((index+1)*elem_size), elem_size * (arr_size-index-1));
-}
-
-#define dynarray_append(da_ptr, elem_ptr) _dynarray_append((void**)(da_ptr), sizeof(typeof(*(elem_ptr))), (elem_ptr))
-#define dynarray_set(da_ptr, idx, elem_ptr) _dynarray_set((void**)(da_ptr), sizeof(typeof(*(elem_ptr))), (idx), (elem_ptr))
-#define dynarray_append_v(da_ptr, value) do { \
-        char _elem_buf[sizeof(value)] \
-        _dynarray_append((void**)(da_ptr), sizeof(value), (_elem_buf)) \
-    } while (0)
-#define dynarray_set_v(da_ptr, idx, value) do { \
-        char _elem_buf[sizeof(value)] \
-        _dynarray_set((void**)(da_ptr), sizeof(*(elem_ptr)), (idx), (value)) \
-    } while (0)
-void _dynarray_append(void *da_raw[static 1], size_t elem_size, void *elem) {
-    struct dynarray {
-        size_t capacity;
-        size_t size;
-        char data[];
-    }__attribute__((packed));
-    struct dynarray *da = *da_raw;
-
-    // Expand the array size if needed with realloc
-    if (da->capacity == da->size) {
-        size_t new_capacity = da->capacity*1.5 + 1;
-        void *res = realloc(*da_raw, sizeof(*da) + elem_size*new_capacity);
-        if (res == NULL) {
-            TraceLog(LOG_FATAL, "Could not realloc dynamic array");
-            exit(1);
-        }
-        *da_raw = da = res;
-        da->capacity = new_capacity;
-    }
-
-    // Copy new element over
-    memcpy(&da->data[da->size*elem_size], elem, elem_size);
-}
-
-void _dynarray_set(void *da_raw[static 1], size_t elem_size, size_t index, void *elem) {
-    struct dynarray {
-        size_t capacity;
-        size_t size;
-        char data[];
-    }__attribute__((packed));
-
-    assert(da_raw != NULL);
-    assert(*da_raw != NULL);
-    struct dynarray *da = *da_raw;
-
-    // Expand the array size if needed with realloc
-    if (index >= da->capacity) {
-        size_t new_capacity = index + 1;
-        void *res = realloc(*da_raw, sizeof(*da) + elem_size*new_capacity);
-        if (res == NULL) {
-            TraceLog(LOG_FATAL, "Could not realloc dynamic array");
-            exit(1);
-        }
-        *da_raw = da = res;
-        da->capacity = new_capacity;
-    }
-
-    // Copy new element in desired index
-    memcpy(&da->data[elem_size*index], elem, elem_size);
 }
 
 // inserts newline ('\n') characters, without splitting words if possible.
@@ -84,7 +21,7 @@ void _dynarray_set(void *da_raw[static 1], size_t elem_size, size_t index, void 
 //      over_len_maxchars, the acceptable number of characters a line can go over the desired lenght
 //      prec_lf_maxchars, the acceptable amount of whitespace remaining in a line when a precocious linefeed is
 //          made on said line (i.e. when the newline character is inserted before reaching line_maxlen characters)
-void linefeed_string(int len, char *str, size_t bufsiz, int line_maxlen, int over_len_maxchars, int prec_lf_maxchars) {
+static inline void linefeed_string(int len, char *str, size_t bufsiz, int line_maxlen, int over_len_maxchars, int prec_lf_maxchars) {
     // minus one to reserve space for the null terminator
     size_t bufferBytesLeft = bufsiz-1 - len;
 
